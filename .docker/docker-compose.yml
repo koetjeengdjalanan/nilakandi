@@ -1,0 +1,38 @@
+services:
+  web:
+    hostname: Nilakandi-web
+    container_name: Nilakandi-web
+    image: mcr.microsoft.com/devcontainers/python:1-3.12-bullseye
+    user: vscode
+    stdin_open: true
+    tty: true
+    volumes:
+      - ..:/workspace:cached
+    ports:
+      - "80:8000/tcp"
+      - "21180:21180/tcp"
+    networks:
+      - nilakandi-net
+  
+  db:
+    hostname: Nilakandi-db
+    container_name: Nilakandi-db
+    image: postgres:13
+    volumes:
+      - nilakandi-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: arjuna
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: nilakandi
+    ports:
+      - 21132:5432
+    networks:
+      - nilakandi-net
+  
+networks:
+  nilakandi-net:
+    driver: bridge
+
+volumes:
+  nilakandi-db-data:
+    driver: local

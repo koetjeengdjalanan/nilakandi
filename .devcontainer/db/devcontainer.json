@@ -1,0 +1,7 @@
+{
+    "name": "Nilakandi-DB",
+    "dockerComposeFile": "../../.docker/docker-compose.yml",
+    "service": "db",
+    "shutdownAction": "stopCompose",
+    "workspaceFolder": "/workspace"
+}

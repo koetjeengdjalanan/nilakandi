@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}
+  Nilakandi - Services Cost
+{% endblock %}
+{% block content %}
+  <h1>Services Cost</h1>
+
+  <form method="get" class="form-inline">
+    <label for="perPage">Items per page:</label>
+    <select name="perPage" id="perPage" onchange="this.form.submit()">
+      <option value="10" {% if perPage == '10' %} selected {% endif%}>10</option>
+      <option value="25" {% if perPage == '25' %} selected {% endif%}>25</option>
+      <option value="50" {% if perPage == '50' %} selected {% endif%}>50</option>
+    </select>
+  </form>
+
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        {% for header in field_names %}
+          <th scope="col">{{ header|title }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for service in page_obj %}
+        <tr>
+          <th scope="row">{{ service.id }}</th>
+          <td>{{ service.source }}</td>
+          <td>{{ service.usage_date }}</td>
+          <td>{{ service.publisher_type }}</td>
+          <td>{{ service.charge_type }}</td>
+          <td>{{ service.service_name }}</td>
+          <td>{{ service.service_tier }}</td>
+          <td>{{ service.meter }}</td>
+          <td>{{ service.part_number }}</td>
+          <td>{{ service.cost_usd|floatformat:4 }}</td>
+          <td>{{ service.cost|floatformat:4 }}</td>
+          <td>{{ service.currency }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <span class="step-links">
+      {% if page_obj.has_previous %}
+        <a href="?page=1&perPage={{ perPage }}">&laquo; first</a>
+        <a href="?page={{ page_obj.previous_page_number }}&perPage={{ perPage }}">previous</a>
+      {% endif %}
+
+      <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.</span>
+
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&perPage={{ perPage }}">next</a>
+        <a href="?page={{ page_obj.paginator.num_pages }}&perPage={{ perPage }}">last &raquo;</a>
+      {% endif %}
+    </span>
+  </div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}
+  Subscription Report
+{% endblock %}
+{% block content %}
+  <h1>Subscription Report</h1>
+  <hr/>
+  <h2>{{ subsName }} Pivot Table</h2>
+  {{ pivotTable | safe }}
+{% endblock %}

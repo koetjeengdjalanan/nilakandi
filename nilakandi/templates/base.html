@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>
+      {% block title %}
+        Nilakandi
+      {% endblock %}
+    </title>
+    {% load bootstrap5 %}
+    {% bootstrap_css %}
+    {% bootstrap_javascript %}
+  </head>
+  <body>
+    <div class="container">
+      {% include 'navbar.html' %}
+      <br/>
+      <br/>
+      <br/>
+      {% block content %}
+
+      {% endblock %}
+    </div>
+  </body>
+</html>
