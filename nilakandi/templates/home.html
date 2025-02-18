@@ -18,7 +18,7 @@
     <tbody>
       {% for item in countTable %}
         <tr>
-          <td><a href="{% url 'subscription' item.subsId %}">{{ item.name }}</a></td>
+          <td><a href="{% url 'subscription details' item.subsId %}">{{ item.name }}</a></td>
           <td>{{ item.service }}</td>
           <td>{{ item.marketplace }}</td>
         </tr>

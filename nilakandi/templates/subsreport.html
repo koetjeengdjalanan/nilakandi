@@ -6,5 +6,31 @@
   <h1>Subscription Report</h1>
   <hr/>
   <h2>{{ subsName }} Pivot Table</h2>
-  {{ pivotTable | safe }}
+  {% for key, pivot in pivotTable.items %}
+    <h3 class="text-center">{{ key }}</h3>
+    <div class="pivot-table-container">
+      {{ pivot | safe }}
+    </div>
+  {% endfor %}
+  <style>
+    th {
+      white-space: nowrap;
+    }
+    td {
+      text-align: right;
+    }
+    .pivot-table-container {
+      display: flex;
+      justify-content: center;
+    }
+    .pivot-table-container table {
+      margin: 0;
+      padding: 0;
+      width: auto;
+    }
+    @media (max-width: 100vw) {
+      .pivot-table-container table {
+        width: 100%;
+      }
+    }
 {% endblock %}

@@ -1,16 +1,14 @@
-from uuid import UUID
-
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
 from django.conf import settings
 
-from .models import Services, Marketplace
 from .helper.serve_data import SubsData
 from .helper.azure_api import Auth, Services, Subscriptions
 from nilakandi.models import (
     Subscription as SubscriptionsModel,
     Marketplace as MarketplacesModel,
+    Services as ServicesModel,
 )
 
 # Create your views here.
@@ -35,20 +33,42 @@ def home(request):
     return render(request=request, template_name="home.html", context=data)
 
 
-def subscription(request, subsId):
+def subscriptions(request):
+    subs = SubscriptionsModel.objects.all()
+    data = {
+        "subs": subs,
+        "field_names": [field.name for field in SubscriptionsModel._meta.fields],
+    }
+    print(request)
+    return render(request, "subscriptions.html", context=data)
+
+
+def subscription_details(request, subsId):
+    def toHtml(data) -> str:
+        if data.empty:
+            return "<pre>No Data</pre>"
+        return data.to_html(
+            classes="table table-striped", float_format="{:,.8f}".format, na_rep="n/a"
+        )
+
     try:
         sub = SubscriptionsModel.objects.get(subscription_id=subsId)
     except SubscriptionsModel.DoesNotExist:
         redirect("home")
+        return None
+    serveData = SubsData(sub=sub)
     data = {
         "subsName": sub.display_name,
-        "pivotTable": SubsData(sub=sub).pivot().to_html(classes="table table-striped"),
+        "pivotTable": {
+            "services": toHtml(serveData.service()),
+            "marketplaces": toHtml(serveData.marketplace()),
+        },
     }
     return render(request=request, template_name="subsreport.html", context=data)
 
 
 def services(request):
-    services = Services.objects.all()
+    services = ServicesModel.objects.all()
     perPage = request.GET.get("perPage", 10)
     paginanator = Paginator(object_list=services, per_page=perPage)
 

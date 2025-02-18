@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}
+    Subscriptions
+{% endblock %}
+{% block content %}
+    <h1>Subscriptions</h1>
+    <hr />
+    <table class="table table-striped">
+        <thead>
+            <tr>
+              <th scope="col">subscription_id</th>
+              <th scope="col">id</th>
+              <th scope="col">display_name</th>
+              <th scope="col">state</th>
+              <th scope="col">subscription_policies</th>
+              <th scope="col">authorization_source</th>
+              <th scope="col">additional_properties</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sub in subs %}
+            <tr>
+                <td>{{ sub.subscription_id }} </td>
+                <td>{{ sub.id }} </td>
+                <td>{{ sub.display_name }} </td>
+                <td>{{ sub.state }} </td>
+                <td>{{ sub.subscription_policies }} </td>
+                <td>{{ sub.authorization_source }} </td>
+                <td>{{ sub.additional_properties }} </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+{% endblock %}
