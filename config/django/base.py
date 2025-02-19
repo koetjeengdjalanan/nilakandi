@@ -15,14 +15,16 @@ from config.env import env, BASE_DIR
 
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
-from config.settings.azure import *
+from config.settings.azure import *  # noqa: E402, F403
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env(
-    "SECRET_KEY", default="django-insecure-r+q^^6!#5tyql6z#o!v*xb8a)ckfj)c$x*1v!4t5nk9h^ko5_x")
+    "SECRET_KEY",
+    default="django-insecure-r+q^^6!#5tyql6z#o!v*xb8a)ckfj)c$x*1v!4t5nk9h^ko5_x",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG", default=True)
@@ -40,7 +42,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "bootstrap5",
-    "nilakandi"
+    "nilakandi",
 ]
 
 MIDDLEWARE = [

@@ -15,6 +15,7 @@ from nilakandi.models import (
 
 
 def home(request):
+    print(request.user)
     data = {
         "user": "Admin",
         "countTable": [
@@ -60,8 +61,8 @@ def subscription_details(request, subsId):
     data = {
         "subsName": sub.display_name,
         "pivotTable": {
-            "services": toHtml(serveData.service()),
-            "marketplaces": toHtml(serveData.marketplace()),
+            "Services": toHtml(serveData.service()),
+            "Marketplaces": toHtml(serveData.marketplace()),
         },
     }
     return render(request=request, template_name="subsreport.html", context=data)

@@ -8,27 +8,42 @@
     <table class="table table-striped">
         <thead>
             <tr>
-              <th scope="col">subscription_id</th>
-              <th scope="col">id</th>
-              <th scope="col">display_name</th>
-              <th scope="col">state</th>
-              <th scope="col">subscription_policies</th>
-              <th scope="col">authorization_source</th>
-              <th scope="col">additional_properties</th>
+              <th scope="col">Subscription Id</th>
+              <th scope="col">Display Name</th>
+              <th scope="col">State</th>
+              <th scope="col">Authorization Source</th>
+              <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for sub in subs %}
             <tr>
                 <td>{{ sub.subscription_id }} </td>
-                <td>{{ sub.id }} </td>
                 <td>{{ sub.display_name }} </td>
                 <td>{{ sub.state }} </td>
-                <td>{{ sub.subscription_policies }} </td>
                 <td>{{ sub.authorization_source }} </td>
-                <td>{{ sub.additional_properties }} </td>
+                <td><div class="btn-group" role="group" aria-label="action">
+                  <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#exampleModal">Details</button>
+                  <button type="button" class="btn btn-primary">Get</button>
+                </div></td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+      {% comment %} <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h1 class="modal-title fs-5" id="exampleModalLabel">Modal title</h1>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              ...
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div> {% endcomment %}
 {% endblock %}
