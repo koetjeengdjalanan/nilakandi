@@ -13,7 +13,7 @@ services:
       - "21180:21180/tcp"
     networks:
       - nilakandi-net
-  
+
   db:
     hostname: Nilakandi-db
     container_name: Nilakandi-db
@@ -28,7 +28,16 @@ services:
       - 21132:5432
     networks:
       - nilakandi-net
-  
+
+  redis:
+    hostname: Nilakandi-redis
+    container_name: Nilakandi-redis
+    image: redis:6
+    ports:
+      - 21179:6379
+    networks:
+      - nilakandi-net
+
 networks:
   nilakandi-net:
     driver: bridge
