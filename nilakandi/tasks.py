@@ -8,9 +8,9 @@ from datetime import datetime as dt, timezone, timedelta
 @shared_task
 def grab_services(auth: azi.Auth, sub: SubscriptionsModel, start_date: dt, end_date: dt) -> None:
     loopedDate = start_date
-    deltaDays: int = 3 if (
-        end_date - start_date).days > 3 else (end_date - start_date).days
     while loopedDate <= end_date:
+        deltaDays: int = 3 if (
+            end_date - start_date).days >= 3 else (end_date - start_date).days
         tempDate = loopedDate + timedelta(days=deltaDays)
         services = azi.Services(
             auth=auth,
