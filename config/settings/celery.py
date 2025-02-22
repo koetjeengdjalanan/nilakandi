@@ -1,12 +1,10 @@
 from __future__ import absolute_import, unicode_literals
 
+from celery import Celery
+from config.env import env, BASE_DIR
 import os
 
-from celery import Celery
-
-from config.env import BASE_DIR, env
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.django.local")
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.django.local')
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
 app = Celery("config")

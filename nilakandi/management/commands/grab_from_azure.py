@@ -6,11 +6,13 @@ from django.core.management.base import BaseCommand, no_translations
 
 from nilakandi.helper import azure_api
 from nilakandi.models import Subscription as SubscriptionsModel
-from nilakandi.tasks import grab_marketplaces, grab_services
+from nilakandi.helper import azure_api
+from nilakandi.tasks import grab_services, grab_marketplaces
+
+from datetime import datetime as dt, timezone, timedelta
 
 
 class Command(BaseCommand):
-
     help = "Gather data from Azure API and save it to the database using celery as task queue."
 
     def add_arguments(self, parser):
@@ -41,15 +43,18 @@ class Command(BaseCommand):
 
     @no_translations
     def handle(self, *args, **options):
-
         startDate = dt.fromisoformat(options["start_date"]).date()
         endDate = dt.fromisoformat(options["end_date"]).date()
         if endDate < startDate:
             raise ValueError("End date must be later than start date.")
-
         if endDate > dt.now().date():
             raise ValueError("End date must be earlier than today.")
 
+        creds = {
+            "client_id": str(settings.AZURE_CLIENT_ID),
+            "tenant_id": str(settings.AZURE_TENANT_ID),
+            "client_secret": str(settings.AZURE_CLIENT_SECRET),
+        }
         creds = {
             "client_id": str(settings.AZURE_CLIENT_ID),
             "tenant_id": str(settings.AZURE_TENANT_ID),

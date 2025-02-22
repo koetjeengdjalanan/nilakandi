@@ -53,11 +53,13 @@ class Auth:
             client_id=self.client_id,
             client_secret=self.client_secret,
         )
-        self.token = self.credential.get_token("https://management.azure.com/.default")
+        self.token = self.credential.get_token(
+            "https://management.azure.com/.default")
 
 
 class Services:
-    """Azure API Services class to get data from Azure API"""
+    """Azure API Services class to get data from Azure API
+    """
 
     def __init__(
         self,
@@ -68,7 +70,8 @@ class Services:
     ) -> None:
         self.auth = auth
         self.subscription: SubscriptionsModel = subscription
-        self.startDate = start_date if start_date else end_date - timedelta(days=7)
+        self.startDate = start_date if start_date else end_date - \
+            timedelta(days=7)
         self.endDate = end_date
 
     def get(self) -> "Services":
@@ -77,7 +80,6 @@ class Services:
         Returns:
             Services: Azure API Services object
         """
-
         client = CostManagementClient(credential=self.auth.credential)
         self.scope = self.subscription.id
         self.query = QueryDefinition(
@@ -106,20 +108,9 @@ class Services:
                 ],
             ),
         )
-        self.clientale = client.query
-        self.queryRes: QueryResult = self.clientale.usage(
-            scope=self.scope, parameters=self.query
-        )
-        self.nextLink: str = self.queryRes.next_link
-        self.res: DataFrame = DataFrame(
-            data=self.queryRes.rows,
-            columns=[
-                sub(
-                    r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col.name
-                ).lower()
-                for col in self.queryRes.columns
-            ],
-        )
+        self.clientale: QueryResult = client.query
+        self.res = self.clientale.usage(
+            scope=self.scope, parameters=self.query)
         return self
 
     def next(self, next_uri: str | None = None) -> "Services":
@@ -180,38 +171,73 @@ class Services:
         Returns:
             Services: Azure API Services object
         """
-        if not isinstance(self.res, DataFrame) or self.res.empty:
-            print(f"Data: {self.res.head(5)}")
+        if not self.res or self.res is None:
             raise ValueError("No data to save")
-        data: list[ServicesModel] = [
-            ServicesModel(
-                subscription=self.subscription,
-                usage_date=dt.strptime(str(row["usage_date"]), "%Y%m%d"),
-                charge_type=row["charge_type"],
-                service_name=row["service_name"],
-                service_tier=row["service_tier"],
-                meter=row["meter"],
-                part_number=row["part_number"],
-                billing_month=dt.fromisoformat(row["billing_month"]).date(),
-                resource_id=row["resource_id"],
-                resource_type=row["resource_type"],
-                cost_usd=row["cost_usd"],
-                currency=row["currency"],
-            )
-            for index, row in self.res.iterrows()
+        data: list[ServicesModel] = []
+        cols = [
+            sub(r"(?<!^)(?=[A-Z])", "_", col.name).lower() for col in self.res.columns
         ]
+        cols[cols.index("cost_u_s_d")] = "cost_usd"
+        for item in self.res.rows:
+            if "usage_date" in cols and item[cols.index("usage_date")]:
+                dateIs = dt.strptime(
+                    str(item[cols.index("usage_date")]), "%Y%m%d")
+            else:
+                dateIs = dt.now()
+            data.append(
+                ServicesModel(
+                    subscription=self.subscription,
+                    usage_date=dateIs,
+                    charge_type=(
+                        item[cols.index("charge_type")]
+                        if "charge_type" in cols
+                        else None
+                    ),
+                    service_name=(
+                        item[cols.index("service_name")]
+                        if "service_name" in cols
+                        else None
+                    ),
+                    service_tier=(
+                        item[cols.index("service_tier")]
+                        if "service_tier" in cols
+                        else None
+                    ),
+                    meter=item[cols.index(
+                        "meter")] if "meter" in cols else None,
+                    part_number=(
+                        item[cols.index("part_number")]
+                        if "part_number" in cols
+                        else None
+                    ),
+                    cost_usd=(
+                        item[cols.index("cost_usd")
+                             ] if "cost_usd" in cols else None
+                    ),
+                    currency=(
+                        item[cols.index("currency")
+                             ] if "currency" in cols else None
+                    ),
+                )
+            )
         if check_conflic_on_create:
             ServicesModel.objects.bulk_create(
                 data,
                 batch_size=500,
                 ignore_conflicts=ignore_conflicts,
                 update_conflicts=update_conflicts,
-                unique_fields=["usage_date", "service_name", "service_tier", "meter"],
-                update_fields=["charge_type", "part_number", "cost_usd", "currency"],
+                unique_fields=["usage_date", "service_name",
+                               "service_tier", "meter"],
+                update_fields=["charge_type",
+                               "part_number", "cost_usd", "currency"]
             )
         else:
-            ServicesModel.objects.bulk_create(data, batch_size=500)
-
+            ServicesModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts
+            )
         return self
 
     def __dict__(self) -> dict:
@@ -221,7 +247,6 @@ class Services:
 class Subscriptions:
     """Subscriptions class to get all subscriptions from Azure API
     use Azure API SubscriptionClient
-
     """
 
     def __init__(self, auth: Auth) -> None:
@@ -236,9 +261,7 @@ class Subscriptions:
         """Get Data from Azure API
 
         Returns:
-
             Subscriptions: Azure Api Subscriptions object
-
         """
         client = SubscriptionClient(credential=self.auth.credential)
         self.res = [item.as_dict() for item in client.subscriptions.list()]
@@ -283,7 +306,7 @@ class Marketplaces:
         Returns:
             Marketplaces: Azure API Marketplaces object
         """
-        client: ConsumptionManagementClient = ConsumptionManagementClient(
+        client = ConsumptionManagementClient(
             credential=self.auth.credential,
             subscription_id=self.subscription.subscription_id,
         )
@@ -318,16 +341,9 @@ class Marketplaces:
 
         if self.res is None or not self.res:
             raise ValueError("No data to save")
-
         # This is not best practice but it works and I am lazy
-        uniqueFields = [
-            "usage_start",
-            "instance_name",
-            "subscription_name",
-            "publisher_name",
-            "plan_name",
-        ]
-
+        uniqueFields = ["usage_start", "instance_name",
+                        "subscription_name", "publisher_name", "plan_name"]
         data: list[MarketplacesModel] = []
         for item in self.res:
             raw = item.as_dict() if hasattr(item, "as_dict") else vars(item)
@@ -363,19 +379,14 @@ class Marketplaces:
                     is_recurring_charge=raw.get("is_recurring_charge"),
                 )
             )
-
         if check_conflic_on_create:
             MarketplacesModel.objects.bulk_create(
-                data,
-                batch_size=500,
+                data, batch_size=500,
                 ignore_conflicts=ignore_conflicts,
                 update_conflicts=update_conflicts,
                 unique_fields=uniqueFields,
-                update_fields=[
-                    col
-                    for col in MarketplacesModel._meta.get_fields()
-                    if col.name not in uniqueFields
-                ],
+                update_fields=[col for col in MarketplacesModel._meta.get_fields(
+                ) if col.name not in uniqueFields]
             )
         else:
             MarketplacesModel.objects.bulk_create(
