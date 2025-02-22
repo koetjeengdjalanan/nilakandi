@@ -79,7 +79,7 @@ def grab_marketplaces(creds: dict[str, str], subscription_id: UUID, start_date: 
         deltaDays: int = 3 if (
             end_date - start_date).days >= 3 else (end_date - start_date).days
         tempDate = loopedDate + timedelta(days=deltaDays)
-        marketplace = azi.Marketplace(
+        marketplace = azi.Marketplaces(
             auth=auth,
             subscription=sub,
             start_date=loopedDate,
