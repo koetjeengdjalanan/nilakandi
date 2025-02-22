@@ -15,10 +15,6 @@ from config.env import env, BASE_DIR
 
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
-from config.settings.azure import *  # noqa: E402, F403
-from config.settings.celery import *  # noqa: E402, F403
-from config.settings.redis import *  # noqa: E402, F403
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
@@ -140,3 +136,7 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+from config.settings.azure import *  # noqa: E402, F403
+from config.settings.celery import *  # noqa: E402, F403
+from config.settings.redis import *  # noqa: E402, F403
