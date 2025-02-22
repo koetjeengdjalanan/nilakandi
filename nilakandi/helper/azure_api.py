@@ -42,12 +42,12 @@ class Auth:
             client_id=self.client_id,
             client_secret=self.client_secret,
         )
-        self.token = self.credential.get_token("https://management.azure.com/.default")
+        self.token = self.credential.get_token(
+            "https://management.azure.com/.default")
 
 
 class Services:
-    """
-    Azure API Services class to get data from Azure API
+    """Azure API Services class to get data from Azure API
     """
 
     def __init__(
@@ -59,11 +59,16 @@ class Services:
     ) -> None:
         self.auth = auth
         self.subscription: SubscriptionsModel = subscription
-        self.startDate = start_date if start_date else end_date - timedelta(days=7)
+        self.startDate = start_date if start_date else end_date - \
+            timedelta(days=7)
         self.endDate = end_date
 
     def get(self) -> "Services":
-        """Get data from Azure API"""
+        """Get from Azure API
+
+        Returns:
+            Services: Azure API Services object
+        """
         client = CostManagementClient(credential=self.auth.credential)
         self.scope = self.subscription.id
         self.query = QueryDefinition(
@@ -89,10 +94,21 @@ class Services:
             ),
         )
         self.clientale: QueryResult = client.query
-        self.res = self.clientale.usage(scope=self.scope, parameters=self.query)
+        self.res = self.clientale.usage(
+            scope=self.scope, parameters=self.query)
         return self
 
-    def db_save(self) -> "Services":
+    def db_save(self, ignore_conflicts: bool = False, update_conflicts: bool = True, check_conflic_on_create: bool = True) -> "Services":
+        """Save data to DB
+
+        Args:
+            ignore_conflicts (bool, optional): Should DB ignore conficted data. Defaults to False.
+            update_conflicts (bool, optional): Should DB update conflicted data. Defaults to True.
+            check_conflic_on_create (bool, optional): If data confilcting should it be updated. Defaults to True.
+
+        Returns:
+            Services: Azure API Services object
+        """
         if not self.res or self.res is None:
             raise ValueError("No data to save")
         data: list[ServicesModel] = []
@@ -102,7 +118,8 @@ class Services:
         cols[cols.index("cost_u_s_d")] = "cost_usd"
         for item in self.res.rows:
             if "usage_date" in cols and item[cols.index("usage_date")]:
-                dateIs = dt.strptime(str(item[cols.index("usage_date")]), "%Y%m%d")
+                dateIs = dt.strptime(
+                    str(item[cols.index("usage_date")]), "%Y%m%d")
             else:
                 dateIs = dt.now()
             data.append(
@@ -124,21 +141,41 @@ class Services:
                         if "service_tier" in cols
                         else None
                     ),
-                    meter=item[cols.index("meter")] if "meter" in cols else None,
+                    meter=item[cols.index(
+                        "meter")] if "meter" in cols else None,
                     part_number=(
                         item[cols.index("part_number")]
                         if "part_number" in cols
                         else None
                     ),
                     cost_usd=(
-                        item[cols.index("cost_usd")] if "cost_usd" in cols else None
+                        item[cols.index("cost_usd")
+                             ] if "cost_usd" in cols else None
                     ),
                     currency=(
-                        item[cols.index("currency")] if "currency" in cols else None
+                        item[cols.index("currency")
+                             ] if "currency" in cols else None
                     ),
                 )
             )
-        ServicesModel.objects.bulk_create(data, batch_size=500)
+        if check_conflic_on_create:
+            ServicesModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
+                unique_fields=["usage_date", "service_name",
+                               "service_tier", "meter"],
+                update_fields=["charge_type",
+                               "part_number", "cost_usd", "currency"]
+            )
+        else:
+            ServicesModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts
+            )
         return self
 
     def __dict__(self) -> dict:
@@ -146,8 +183,8 @@ class Services:
 
 
 class Subscriptions:
-    """
-    Subscriptions class to get all subscriptions from Azure API
+    """Subscriptions class to get all subscriptions from Azure API
+    use Azure API SubscriptionClient
     """
 
     def __init__(self, auth: Auth) -> None:
@@ -162,7 +199,7 @@ class Subscriptions:
         """Get Data from Azure API
 
         Returns:
-            Subscriptions: Subscriptions object
+            Subscriptions: Azure Api Subscriptions object
         """
         client = SubscriptionClient(credential=self.auth.credential)
         self.res = [item.as_dict() for item in client.subscriptions.list()]
@@ -187,6 +224,10 @@ class Subscriptions:
 
 
 class Marketplaces:
+    """Azure API Marketplaces class to get data
+    use Azure API ConsumptionManagementClient
+    """
+
     def __init__(
         self, auth: Auth, subscription: SubscriptionsModel, date: dt = dt.now()
     ) -> None:
@@ -195,6 +236,11 @@ class Marketplaces:
         self.yearMonth: str = date.strftime("%Y%m")
 
     def get(self) -> "Marketplaces":
+        """Get from Azure API
+
+        Returns:
+            Marketplaces: Azure API Marketplaces object
+        """
         client = ConsumptionManagementClient(
             credential=self.auth.credential,
             subscription_id=self.subscription.subscription_id,
@@ -205,7 +251,17 @@ class Marketplaces:
         )
         return self
 
-    def db_save(self) -> "Marketplaces":
+    def db_save(self, ignore_conflicts: bool = False, update_conflicts: bool = True, check_conflic_on_create: bool = True) -> "Marketplaces":
+        """Save data to DB
+
+        Args:
+            ignore_conflicts (bool, optional): Should DB ignore conficted data. Defaults to False.
+            update_conflicts (bool, optional): Should DB update conflicted data. Defaults to True.
+            check_conflic_on_create (bool, optional): If data confilcting should it be updated. Defaults to True.
+
+        Returns:
+            Marketplaces: Azure API Marketplaces object
+        """
         def get_uuid(value):
             try:
                 return str(uuid.UUID(value)) if value else None
@@ -214,6 +270,9 @@ class Marketplaces:
 
         if self.res is None or not self.res:
             raise ValueError("No data to save")
+        # This is not best practice but it works and I am lazy
+        uniqueFields = ["usage_start", "instance_name",
+                        "subscription_name", "publisher_name", "plan_name"]
         data: list[MarketplacesModel] = []
         for item in self.res:
             raw = item.as_dict() if hasattr(item, "as_dict") else vars(item)
@@ -249,5 +308,13 @@ class Marketplaces:
                     is_recurring_charge=raw.get("is_recurring_charge"),
                 )
             )
-        MarketplacesModel.objects.bulk_create(data, batch_size=500)
+        if check_conflic_on_create:
+            MarketplacesModel.objects.bulk_create(
+                data, batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
+                unique_fields=uniqueFields,
+                update_fields=[col for col in MarketplacesModel._meta.get_fields(
+                ) if col.name not in uniqueFields]
+            )
         return self

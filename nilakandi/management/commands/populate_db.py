@@ -27,7 +27,7 @@ class Command(BaseCommand):
                 subscription=sub,
                 start_date=dt(year=date.year, month=date.month - 1, day=1),
                 end_date=dt(
-                    year=date.year, month=date.month - 1, day=1, timezone=localTz
+                    year=date.year, month=date.month - 1, day=1
                 ),
             )
             services.get().db_save()
@@ -36,7 +36,7 @@ class Command(BaseCommand):
             marketplace = azure_api.Marketplaces(
                 auth=auth,
                 subscription=sub,
-                date=dt(year=date.year, month=date.month - 1, day=1, timezone=localTz),
+                date=dt(year=date.year, month=date.month - 1, day=1),
             )
             marketplace.get().db_save()
             marketplaceCount = sub.marketplace_set.count()
