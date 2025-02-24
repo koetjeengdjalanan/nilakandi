@@ -120,7 +120,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = env("TIME_ZONE", default="UTC")
+TIME_ZONE: str = env("TIME_ZONE", default="UTC")
 
 USE_I18N = True
 
