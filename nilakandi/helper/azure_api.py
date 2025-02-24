@@ -104,7 +104,7 @@ class Services:
                     QueryGrouping(name="BillingMonth", type="Dimension"),
                     QueryGrouping(name="ResourceId", type="Dimension"),
                     QueryGrouping(name="ResourceType", type="Dimension"),
-                    # QueryGrouping(name="VM Name", type="TagKey"),
+                    QueryGrouping(name="VM Name", type="TagKey"),
                 ],
             ),
         )
