@@ -10,7 +10,7 @@ Nilakandi is a web application for Cloud management data gathering. Up until thi
 - [Installation](#installation)
 - [Usage](#usage)
 - [Contributing](#contributing)
-- [License](#license)
+
 
 ## Introduction
 
@@ -25,12 +25,11 @@ Nilakandi is designed to help organizations manage and analyze their cloud costs
 
 ## Prerequisites 
 
-- Docker:
+> [!IMPORTANT]  
+> If you are using Windows, You need ``wsl2`` to run Docker Desktop!
 
-    > [!IMPORTANT]
-    > If you are using Windows, You need ``wsl2`` to run Docker Desktop!
-    
-    Follow this step to install Docker in your operating system: [Docker installation guide](https://docs.docker.com/engine/install/)
+- Docker:
+  - Follow this step to install Docker in your operating system: [Docker installation guide](https://docs.docker.com/engine/install/)
 
 
 ## Installation
