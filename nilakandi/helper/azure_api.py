@@ -90,6 +90,10 @@ class Services:
                     QueryGrouping(name="ServiceTier", type="Dimension"),
                     QueryGrouping(name="Meter", type="Dimension"),
                     QueryGrouping(name="PartNumber", type="Dimension"),
+                    QueryGrouping(name="BillingMonth", type="Dimension"),
+                    QueryGrouping(name="ResourceId", type="Dimension"),
+                    QueryGrouping(name="ResourceType", type="Dimension"),
+                    QueryGrouping(name="VM Name", type="TagKey"),
                 ],
             ),
         )
