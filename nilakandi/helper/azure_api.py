@@ -1,6 +1,11 @@
+import uuid
+
+from pandas import DataFrame
 from re import sub
 from datetime import datetime as dt, timedelta
-import uuid
+from zoneinfo import ZoneInfo
+import requests
+
 from azure.identity import ClientSecretCredential
 from azure.mgmt.consumption import ConsumptionManagementClient
 from azure.mgmt.costmanagement import CostManagementClient
@@ -14,6 +19,7 @@ from azure.mgmt.costmanagement.models import (
     QueryResult,
 )
 
+from config.django.base import TIME_ZONE
 from nilakandi.models import (
     Subscription as SubscriptionsModel,
     Services as ServicesModel,
@@ -54,7 +60,7 @@ class Services:
         self,
         auth: Auth,
         subscription: SubscriptionsModel,
-        end_date: dt = dt.now(),
+        end_date: dt = dt.now(ZoneInfo(TIME_ZONE)),
         start_date: dt | None = None,
     ) -> None:
         self.auth = auth
@@ -93,13 +99,52 @@ class Services:
                     QueryGrouping(name="BillingMonth", type="Dimension"),
                     QueryGrouping(name="ResourceId", type="Dimension"),
                     QueryGrouping(name="ResourceType", type="Dimension"),
-                    QueryGrouping(name="VM Name", type="TagKey"),
+                    # QueryGrouping(name="VM Name", type="TagKey"),
                 ],
             ),
         )
-        self.clientale: QueryResult = client.query
-        self.res = self.clientale.usage(
+        self.clientale = client.query
+        self.queryRes: QueryResult = self.clientale.usage(
             scope=self.scope, parameters=self.query)
+        self.nextLink: str = self.queryRes.next_link
+        self.res: DataFrame = DataFrame(
+            data=self.queryRes.rows, columns=[
+                sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col.name).lower() for col in self.res.columns
+            ]
+        )
+        return self
+
+    def next(self, next_uri: str | None = None) -> "Services":
+        if (not self.nextLink) or (self.nextLink is None):
+            raise ValueError("No next link")
+        payload = {
+            "type": "ActualCost",
+            "timeframe": "Custom",
+            "timePeriod": {
+                "from": self.query.time_period.as_dict()['from_property'],
+                "to": self.query.time_period.as_dict()['to']
+            },
+            "dataset": self.query.dataset.as_dict()
+        }
+        try:
+            next_res = requests.post(
+                url=self.nextLink if not next_uri else next_uri,
+                headers={
+                    "Authorization": f"Bearer {self.auth.token.token}",
+                    "Content-Type": "application/json",
+                    "User-Agent": str(self.clientale._config.user_agent_policy._user_agent)
+                },
+                json=payload,
+            )
+            next_res.raise_for_status()
+        except requests.HTTPError as e:
+            raise e
+        self.nextLink: str = next_res['properties']['nextLink']
+        self.res: DataFrame = DataFrame(
+            next_res['properties']['rows'], columns=[
+                sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col['name']).lower() for col in next_res['properties']['columns']
+            ]
+        )
         return self
 
     def db_save(self, ignore_conflicts: bool = False, update_conflicts: bool = True, check_conflic_on_create: bool = True) -> "Services":
@@ -113,55 +158,26 @@ class Services:
         Returns:
             Services: Azure API Services object
         """
-        if not self.res or self.res is None:
+        if not isinstance(self.res, DataFrame) or self.res.empty:
             raise ValueError("No data to save")
-        data: list[ServicesModel] = []
-        cols = [
-            sub(r"(?<!^)(?=[A-Z])", "_", col.name).lower() for col in self.res.columns
-        ]
-        cols[cols.index("cost_u_s_d")] = "cost_usd"
-        for item in self.res.rows:
-            if "usage_date" in cols and item[cols.index("usage_date")]:
-                dateIs = dt.strptime(
-                    str(item[cols.index("usage_date")]), "%Y%m%d")
-            else:
-                dateIs = dt.now()
-            data.append(
-                ServicesModel(
-                    subscription=self.subscription,
-                    usage_date=dateIs,
-                    charge_type=(
-                        item[cols.index("charge_type")]
-                        if "charge_type" in cols
-                        else None
-                    ),
-                    service_name=(
-                        item[cols.index("service_name")]
-                        if "service_name" in cols
-                        else None
-                    ),
-                    service_tier=(
-                        item[cols.index("service_tier")]
-                        if "service_tier" in cols
-                        else None
-                    ),
-                    meter=item[cols.index(
-                        "meter")] if "meter" in cols else None,
-                    part_number=(
-                        item[cols.index("part_number")]
-                        if "part_number" in cols
-                        else None
-                    ),
-                    cost_usd=(
-                        item[cols.index("cost_usd")
-                             ] if "cost_usd" in cols else None
-                    ),
-                    currency=(
-                        item[cols.index("currency")
-                             ] if "currency" in cols else None
-                    ),
-                )
+        data: list[ServicesModel] = [
+            ServicesModel(
+                subscription=self.subscription,
+                usage_date=dt.strptime(
+                    str(row["usage_date"]), "%Y%m%d") if "usage_date" in row else dt.now(ZoneInfo(TIME_ZONE)),
+                charge_type=row["charge_type"] if "charge_type" in row else None,
+                service_name=row["charge_type"] if "charge_type" in row else None,
+                service_tier=row["charge_type"] if "charge_type" in row else None,
+                meter=row["charge_type"] if "charge_type" in row else None,
+                part_number=row["charge_type"] if "charge_type" in row else None,
+                billing_month=row["charge_type"] if "charge_type" in row else None,
+                resource_id=row["charge_type"] if "charge_type" in row else None,
+                resource_type=row["charge_type"] if "charge_type" in row else None,
+                cost_usd=row["charge_type"] if "charge_type" in row else None,
+                currency=row["charge_type"] if "charge_type" in row else None,
             )
+            for row in self.res.iterrows()
+        ]
         if check_conflic_on_create:
             ServicesModel.objects.bulk_create(
                 data,
@@ -233,7 +249,7 @@ class Marketplaces:
     """
 
     def __init__(
-        self, auth: Auth, subscription: SubscriptionsModel, date: dt = dt.now()
+        self, auth: Auth, subscription: SubscriptionsModel, date: dt = dt.now(ZoneInfo(TIME_ZONE))
     ) -> None:
         self.auth: Auth = auth
         self.subscription: SubscriptionsModel = subscription
@@ -320,5 +336,11 @@ class Marketplaces:
                 unique_fields=uniqueFields,
                 update_fields=[col for col in MarketplacesModel._meta.get_fields(
                 ) if col.name not in uniqueFields]
+            )
+        else:
+            MarketplacesModel.objects.bulk_create(
+                data, batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts
             )
         return self
