@@ -1,14 +1,16 @@
 import uuid
 from datetime import datetime, time, timedelta
 from datetime import datetime as dt
+from datetime import timedelta
+from typing import Iterable
 import uuid
+import requests
 
-from pandas import DataFrame
+from pandas import DataFrame, notna, to_datetime
 from re import sub
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
-import requests
 from azure.identity import ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.consumption import ConsumptionManagementClient
@@ -117,7 +119,7 @@ class Services:
         self.nextLink: str = self.queryRes.next_link
         self.res: DataFrame = DataFrame(
             data=self.queryRes.rows, columns=[
-                sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col.name).lower() for col in self.res.columns
+                sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col.name).lower() for col in self.queryRes.columns
             ]
         )
         return self
@@ -135,7 +137,7 @@ class Services:
             "dataset": self.query.dataset.as_dict()
         }
         try:
-            next_res = requests.post(
+            apiRes = requests.post(
                 url=self.nextLink if not next_uri else next_uri,
                 headers={
                     "Authorization": f"Bearer {self.auth.token.token}",
@@ -144,15 +146,18 @@ class Services:
                 },
                 json=payload,
             )
-            next_res.raise_for_status()
+            apiRes.raise_for_status()
         except requests.HTTPError as e:
             raise e
+        next_res = apiRes.json()
         self.nextLink: str = next_res['properties']['nextLink']
         self.res: DataFrame = DataFrame(
             next_res['properties']['rows'], columns=[
                 sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col['name']).lower() for col in next_res['properties']['columns']
             ]
         )
+        # self.res['usage_date'] = to_datetime(self.res['usage_date'].astype(
+        #     str), format="%Y%m%d")
         return self
 
     def next(self, next_uri: str | None = None) -> "Services":
@@ -214,24 +219,24 @@ class Services:
             Services: Azure API Services object
         """
         if not isinstance(self.res, DataFrame) or self.res.empty:
+            print(f"Data: {self.res.head(5)}")
             raise ValueError("No data to save")
         data: list[ServicesModel] = [
             ServicesModel(
                 subscription=self.subscription,
-                usage_date=dt.strptime(
-                    str(row["usage_date"]), "%Y%m%d") if "usage_date" in row else dt.now(ZoneInfo(TIME_ZONE)),
-                charge_type=row["charge_type"] if "charge_type" in row else None,
-                service_name=row["charge_type"] if "charge_type" in row else None,
-                service_tier=row["charge_type"] if "charge_type" in row else None,
-                meter=row["charge_type"] if "charge_type" in row else None,
-                part_number=row["charge_type"] if "charge_type" in row else None,
-                billing_month=row["charge_type"] if "charge_type" in row else None,
-                resource_id=row["charge_type"] if "charge_type" in row else None,
-                resource_type=row["charge_type"] if "charge_type" in row else None,
-                cost_usd=row["charge_type"] if "charge_type" in row else None,
-                currency=row["charge_type"] if "charge_type" in row else None,
+                usage_date=dt.strptime(str(row["usage_date"]), "%Y%m%d"),
+                charge_type=row["charge_type"],
+                service_name=row["service_name"],
+                service_tier=row["service_tier"],
+                meter=row["meter"],
+                part_number=row["part_number"],
+                billing_month=dt.fromisoformat(row["billing_month"]).date(),
+                resource_id=row["resource_id"],
+                resource_type=row["resource_type"],
+                cost_usd=row["cost_usd"],
+                currency=row["currency"],
             )
-            for row in self.res.iterrows()
+            for index, row in self.res.iterrows()
         ]
         if check_conflic_on_create:
             ServicesModel.objects.bulk_create(
@@ -247,9 +252,7 @@ class Services:
         else:
             ServicesModel.objects.bulk_create(
                 data,
-                batch_size=500,
-                ignore_conflicts=ignore_conflicts,
-                update_conflicts=update_conflicts
+                batch_size=500
             )
         return self
 
@@ -319,7 +322,7 @@ class Marketplaces:
         Returns:
             Marketplaces: Azure API Marketplaces object
         """
-        client = ConsumptionManagementClient(
+        client: ConsumptionManagementClient = ConsumptionManagementClient(
             credential=self.auth.credential,
             subscription_id=self.subscription.subscription_id,
         )
