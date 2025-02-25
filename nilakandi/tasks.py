@@ -7,7 +7,7 @@ from nilakandi.models import Subscription as SubscriptionsModel
 from nilakandi.helper import azure_api as azi
 
 
-@shared_task
+@shared_task(name="nilakandi.tasks.grab_services")
 def grab_services(creds: dict[str, str], subscription_id: UUID, start_date: dt.date, end_date: dt.date, skip_existing: bool = False) -> None:
     """Grab Services data from Azure API with the given parameters.
 
@@ -50,7 +50,7 @@ def grab_services(creds: dict[str, str], subscription_id: UUID, start_date: dt.d
         loopedDate += timedelta(days=deltaDays+1)
 
 
-@shared_task
+@shared_task(name="nilakandi.tasks.grab_marketplaces")
 def grab_marketplaces(creds: dict[str, str], subscription_id: UUID, start_date: dt.date, end_date: dt.date, skip_existing: bool = False) -> None:
     """Grab Marketplaces data from Azure API with the given parameters.
 
