@@ -2,7 +2,7 @@ from typing import Iterable
 import uuid
 import requests
 
-from pandas import DataFrame, notna, to_datetime
+from pandas import DataFrame
 from re import sub
 from datetime import datetime as dt, timedelta
 from zoneinfo import ZoneInfo

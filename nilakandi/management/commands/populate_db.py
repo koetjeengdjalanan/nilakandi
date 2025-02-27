@@ -1,14 +1,14 @@
-from time import sleep
-from django.core.management.base import BaseCommand
-from django.conf import settings
-from requests import HTTPError
-
-from nilakandi.models import Subscription as subs
-from nilakandi.helper import azure_api
-
 from datetime import datetime as dt
-from dateutil.relativedelta import relativedelta
+from time import sleep
 from zoneinfo import ZoneInfo
+
+from dateutil.relativedelta import relativedelta
+from django.conf import settings
+from django.core.management.base import BaseCommand
+
+from nilakandi.azure.api.services import Services
+from nilakandi.helper import azure_api
+from nilakandi.models import Subscription as subs
 
 
 class Command(BaseCommand):
@@ -29,7 +29,7 @@ class Command(BaseCommand):
             "--start-date",
             "-s",
             type=str,
-            default=(dt.now()-relativedelta(months=1)).date().isoformat(),
+            default=(dt.now() - relativedelta(months=1)).date().isoformat(),
             help="[string: yyyy-mm-dd] Start date for data gathering",
         )
         parser.add_argument(
@@ -42,9 +42,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         startDate = dt.fromisoformat(options["start_date"]).replace(
-            tzinfo=ZoneInfo(settings.TIME_ZONE))
+            tzinfo=ZoneInfo(settings.TIME_ZONE)
+        )
         endDate = dt.fromisoformat(options["end_date"]).replace(
-            tzinfo=ZoneInfo(settings.TIME_ZONE))
+            tzinfo=ZoneInfo(settings.TIME_ZONE)
+        )
         print(f"{startDate=}, {endDate=}")
         auth = azure_api.Auth(
             client_id=settings.AZURE_CLIENT_ID,
@@ -54,20 +56,45 @@ class Command(BaseCommand):
         azure_api.Subscriptions(auth=auth).get().db_save()
         for sub in subs.objects.all():
             print(sub.display_name, sub.subscription_id, sep=": ")
-            services = azure_api.Services(
-                auth=auth,
-                subscription=sub,
-                start_date=startDate,
-                end_date=endDate,
+            services = (
+                Services(
+                    bearer_token=auth.token.token,
+                    subscription=sub,
+                    start_date=startDate,
+                    end_date=endDate,
+                )
+                .pull()
+                .db_save()
             )
-            services.get().db_save(check_conflic_on_create=False)
-            while services.nextLink is not None:
-                print(f"{services.nextLink=}")
+            print(services.res.data, sep="\n", end=f"\n{"="*100}>\n")
+            while services.res.next_link:
+                retries = 0
                 try:
-                    services.next()
-                except HTTPError as error:
-                    sleep(60)
-                services.db_save(check_conflic_on_create=False)
+                    nextUrl = services.res.next_link
+                    services.pull(uri=nextUrl).db_save()
+                    print(services.res.data, sep="\n", end=f"\n{"="*100}>\n")
+                except Exception as e:
+                    while services.res.status == 429 and retries < 5:
+                        if retries >= 6:
+                            raise e
+                        retries += 1
+                        print(
+                            f"Rate Limit Exceeded - Retry {retries}",
+                            services.res.headers,
+                            services.res.raw,
+                            f"sleeping for {services.res.headers['x-ms-ratelimit-microsoft.costmanagement-entity-retry-after']} seconds",
+                            sep="\n",
+                            end=f"\n{"="*100}>\n",
+                        )
+                        sleep(
+                            int(
+                                services.res.headers[
+                                    "x-ms-ratelimit-microsoft.costmanagement-entity-retry-after"
+                                ]
+                            )
+                        )
+                        services.pull(uri=nextUrl).db_save()
+
             serviceCount = sub.services_set.count()
             print("Service Count: ", serviceCount)
             # marketplace = azure_api.Marketplaces(
