@@ -14,7 +14,10 @@ from zoneinfo import ZoneInfo
 from azure.identity import ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.consumption import ConsumptionManagementClient
-from azure.mgmt.consumption.models import MarketplacesListResult
+from azure.mgmt.costmanagement import CostManagementClient
+from azure.mgmt.subscription import SubscriptionClient
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.consumption.operations import MarketplacesOperations
 from azure.mgmt.costmanagement import CostManagementClient
 from azure.mgmt.costmanagement.models import (
@@ -58,13 +61,11 @@ class Auth:
             client_id=self.client_id,
             client_secret=self.client_secret,
         )
-        self.token = self.credential.get_token(
-            "https://management.azure.com/.default")
+        self.token = self.credential.get_token("https://management.azure.com/.default")
 
 
 class Services:
-    """Azure API Services class to get data from Azure API
-    """
+    """Azure API Services class to get data from Azure API"""
 
     def __init__(
         self,
@@ -75,8 +76,7 @@ class Services:
     ) -> None:
         self.auth = auth
         self.subscription: SubscriptionsModel = subscription
-        self.startDate = start_date if start_date else end_date - \
-            timedelta(days=7)
+        self.startDate = start_date if start_date else end_date - timedelta(days=7)
         self.endDate = end_date
 
     def get(self) -> "Services":
@@ -115,12 +115,17 @@ class Services:
         )
         self.clientale = client.query
         self.queryRes: QueryResult = self.clientale.usage(
-            scope=self.scope, parameters=self.query)
+            scope=self.scope, parameters=self.query
+        )
         self.nextLink: str = self.queryRes.next_link
         self.res: DataFrame = DataFrame(
-            data=self.queryRes.rows, columns=[
-                sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col.name).lower() for col in self.queryRes.columns
-            ]
+            data=self.queryRes.rows,
+            columns=[
+                sub(
+                    r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col.name
+                ).lower()
+                for col in self.queryRes.columns
+            ],
         )
         return self
 
@@ -131,10 +136,10 @@ class Services:
             "type": "ActualCost",
             "timeframe": "Custom",
             "timePeriod": {
-                "from": self.query.time_period.as_dict()['from_property'],
-                "to": self.query.time_period.as_dict()['to']
+                "from": self.query.time_period.as_dict()["from_property"],
+                "to": self.query.time_period.as_dict()["to"],
             },
-            "dataset": self.query.dataset.as_dict()
+            "dataset": self.query.dataset.as_dict(),
         }
         try:
             apiRes = requests.post(
@@ -142,7 +147,9 @@ class Services:
                 headers={
                     "Authorization": f"Bearer {self.auth.token.token}",
                     "Content-Type": "application/json",
-                    "User-Agent": str(self.clientale._config.user_agent_policy._user_agent)
+                    "User-Agent": str(
+                        self.clientale._config.user_agent_policy._user_agent
+                    ),
                 },
                 json=payload,
             )
@@ -150,11 +157,15 @@ class Services:
         except requests.HTTPError as e:
             raise e
         next_res = apiRes.json()
-        self.nextLink: str = next_res['properties']['nextLink']
+        self.nextLink: str = next_res["properties"]["nextLink"]
         self.res: DataFrame = DataFrame(
-            next_res['properties']['rows'], columns=[
-                sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col['name']).lower() for col in next_res['properties']['columns']
-            ]
+            next_res["properties"]["rows"],
+            columns=[
+                sub(
+                    r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col["name"]
+                ).lower()
+                for col in next_res["properties"]["columns"]
+            ],
         )
         # self.res['usage_date'] = to_datetime(self.res['usage_date'].astype(
         #     str), format="%Y%m%d")
@@ -208,6 +219,12 @@ class Services:
         update_conflicts: bool = True,
         check_conflic_on_create: bool = True,
     ) -> "Services":
+    def db_save(
+        self,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = True,
+        check_conflic_on_create: bool = True,
+    ) -> "Services":
         """Save data to DB
 
         Args:
@@ -244,16 +261,11 @@ class Services:
                 batch_size=500,
                 ignore_conflicts=ignore_conflicts,
                 update_conflicts=update_conflicts,
-                unique_fields=["usage_date", "service_name",
-                               "service_tier", "meter"],
-                update_fields=["charge_type",
-                               "part_number", "cost_usd", "currency"]
+                unique_fields=["usage_date", "service_name", "service_tier", "meter"],
+                update_fields=["charge_type", "part_number", "cost_usd", "currency"],
             )
         else:
-            ServicesModel.objects.bulk_create(
-                data,
-                batch_size=500
-            )
+            ServicesModel.objects.bulk_create(data, batch_size=500)
         return self
 
     def __dict__(self) -> dict:
@@ -338,6 +350,12 @@ class Marketplaces:
         update_conflicts: bool = True,
         check_conflic_on_create: bool = True,
     ) -> "Marketplaces":
+    def db_save(
+        self,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = True,
+        check_conflic_on_create: bool = True,
+    ) -> "Marketplaces":
         """Save data to DB
 
         Args:
@@ -349,6 +367,7 @@ class Marketplaces:
             Marketplaces: Azure API Marketplaces object
         """
 
+
         def get_uuid(value):
             try:
                 return str(uuid.UUID(value)) if value else None
@@ -358,8 +377,13 @@ class Marketplaces:
         if self.res is None or not self.res:
             raise ValueError("No data to save")
         # This is not best practice but it works and I am lazy
-        uniqueFields = ["usage_start", "instance_name",
-                        "subscription_name", "publisher_name", "plan_name"]
+        uniqueFields = [
+            "usage_start",
+            "instance_name",
+            "subscription_name",
+            "publisher_name",
+            "plan_name",
+        ]
         data: list[MarketplacesModel] = []
         for item in self.res:
             raw = item.as_dict() if hasattr(item, "as_dict") else vars(item)
@@ -397,18 +421,25 @@ class Marketplaces:
             )
         if check_conflic_on_create:
             MarketplacesModel.objects.bulk_create(
-                data, batch_size=500,
+                data,
+                batch_size=500,
                 ignore_conflicts=ignore_conflicts,
                 update_conflicts=update_conflicts,
                 unique_fields=uniqueFields,
-                update_fields=[col for col in MarketplacesModel._meta.get_fields(
-                ) if col.name not in uniqueFields]
+                update_fields=[
+                    col
+                    for col in MarketplacesModel._meta.get_fields()
+                    if col.name not in uniqueFields
+                ],
             )
         else:
             MarketplacesModel.objects.bulk_create(
                 data,
                 batch_size=500,
+                data,
+                batch_size=500,
                 ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
                 update_conflicts=update_conflicts,
             )
         return self
@@ -589,3 +620,187 @@ class VirtualMachines:
                 },
             )
         return self
+
+
+class VirtualMachines:
+    def __init__(self, auth: Auth, subscription: SubscriptionsModel) -> None:
+        """Class Initializer
+
+        Args:
+            auth (Auth): Auth object
+            subscription (SubscriptionsModel): Subscription object
+        """
+        self.auth = auth
+        self.subscription: SubscriptionsModel = subscription
+
+    # TODO : Implement Best Practice
+    def get_all(self):
+        """Get All VM based on Subscription from Azure API
+
+        Returns:
+            VirtualMachine: Azure API VirtualMachine and VirtualMachine Billing object
+        """
+        client: ComputeManagementClient = ComputeManagementClient(
+            credential=self.auth.credential,
+            subscription_id=self.subscription.subscription_id,
+        )
+
+        network: NetworkManagementClient = NetworkManagementClient(
+            credential=self.auth.credential,
+            subscription_id=self.subscription.subscription_id,
+        )
+
+        vm_data = []
+
+        vms = client.virtual_machines.list_all()
+
+        for vm in vms:
+            vm_name = vm.name
+            location = vm.location
+
+            tags = vm.tags
+            app_name = (
+                tags.get("Application Name") if tags else "No Application Name tag"
+            )
+
+            nic_id = vm.network_profile.network_interfaces[0].id
+            nic_name = nic_id.split("/")[-1]
+            resource_group = nic_id.split("/")[4]
+
+            nic = network.network_interfaces.get(resource_group, nic_name)
+
+            ip_config = nic.ip_configurations
+            private_ip = ip_config[0].private_ip_address
+
+            # TODO : Append to Model
+            vm_data.append(
+                {
+                    # Subscription Data to identify which VM belongs to which Subscription
+                    "Subscription ID": self.subscription.subscription_id,
+                    "Subscription Name": self.subscription.display_name,
+                    # VM Data (Master)
+                    "VM ID": vm.id,
+                    "VM Name": vm_name,
+                    "VM Type": vm.type,
+                    "VM Location": location,
+                    "VM Plan": vm.plan,
+                    "VM Zones": vm.zones,
+                    "VM Extended Location": vm.extended_location,
+                    "VM Managed By": vm.managed_by,
+                    "VM Etag": vm.etag,
+                    # "Additional Properties": vm.additional_properties, #Object, might be useful later
+                    # "VM Tags": vm.tags, #Object, might be useful later
+                    # "VM Identity": vm.identity, #Array, might be useful later
+                    # "VM Resources": vm.resources, #Object, might be useful later
+                    # "VM Hardware Profile": vm.hardware_profile, #Object, might be useful later
+                    # "VM Storage Profile": vm.storage_profile, #Object, might be useful later
+                    # "VM OS Profile": vm.os_profile, #Object, might be useful later
+                    # "VM Network Profile": vm.network_profile, #Object, might be useful later
+                    # "VM Diagnostics Profile": vm.diagnostics_profile, #Object, might be useful later
+                    "VM Security Profile": vm.security_profile,
+                    "VM Availability Set": vm.availability_set,
+                    "VM Scale Set": vm.virtual_machine_scale_set,
+                    "VM Proximity Placement Group": vm.proximity_placement_group,
+                    "VM Priority": vm.priority,
+                    "VM Eviction Policy": vm.eviction_policy,
+                    "VM Billing Profile": vm.billing_profile,
+                    "VM License Type": vm.license_type,
+                    "VM Host": vm.host,
+                    "VM Host Group": vm.host_group,
+                    "VM Provisioning State": vm.provisioning_state,
+                    "Application Name": app_name,
+                    # NIC Data (Joined) - NIC Data is required to get Private IP as a description
+                    "Private IP": private_ip,
+                }
+            )
+
+            # self.res = vm_data
+
+        return self
+
+    # TODO : Implement Best Practice
+    def get_virtual_machine_billing(self, months):
+        """Get Virtual Machine Billing Data from Azure API
+
+        Returns:
+            VirtualMachine: Azure API VirtualMachine and VirtualMachine Billing object
+        """
+        client: CostManagementClient = CostManagementClient(
+            credential=self.auth.credential,
+            subscription_id=self.subscription.subscription_id,
+        )
+
+        required_columns = [
+            "BillingMonth",
+            "ResourceId",
+            "ResourceType",
+            "ResourceGroup",
+            "ServiceName",
+            "ResourceGroupName",
+            "ResourceLocation",
+            "ConsumedService",
+            "MeterId",
+            "MeterCategory",
+            "MeterSubcategory",
+            "Meter",
+            "DepartmentName",
+            "SubscriptionId",
+            "SubscriptionName",
+        ]
+        
+        start_date, end_date = months
+        
+        time_period = QueryTimePeriod(
+            from_property=start_date,  # Convert datetime to ISO format
+            to=end_date,  # Convert datetime to ISO format
+        )
+        
+        dataset = QueryDataset(
+            granularity="None",
+            aggregation={"totalCost": QueryAggregation(name="PreTaxCost", function="Sum")},
+            grouping=[QueryGrouping(type="Dimension", name=column) for column in required_columns],
+        )
+        
+        query_parameters = QueryDefinition(
+            timeframe="Custom",
+            time_period=time_period,
+            dataset=dataset,
+            type="Usage",
+        )
+        
+        query_result = client.query.usage(
+            scope=f"/subscriptions/{self.subscription.subscription_id}/", parameters=query_parameters
+        )
+        
+        query_result_columns = [column.name for column in query_result.columns]
+        
+        self.res: DataFrame = DataFrame(
+            data=query_result.rows,
+            columns=[name for name in query_result_columns]
+        )
+
+        return self
+    
+    # TODO : Pass this function to get virtual machine billing (Based on debug, we need another function to get the billing range)
+    def months_function():
+        ...
+
+    # TODO : Not sure what to do in this function
+    def db_save(self):
+        """Save Data to DB
+
+        Raises:
+            ValueError: self.res is None or empty
+
+        Returns:
+            VirtualMachine: create or update existing data from DB
+        """
+
+        def get_uuid(value):
+            try:
+                return str(uuid.UUID(value)) if value else None
+            except ValueError:
+                return None
+
+        if self.res is None or not self.res:
+            raise ValueError("No data to save")
