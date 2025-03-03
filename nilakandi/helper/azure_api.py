@@ -391,7 +391,7 @@ class VirtualMachines:
         self.subscription: SubscriptionsModel = subscription
 
     # TODO : Implement Best Practice
-    def get_all(self):
+    def get_virtual_machines(self):
         """Get All VM based on Subscription from Azure API
 
         Returns:
@@ -453,7 +453,7 @@ class VirtualMachines:
         return self
 
     # TODO : Implement Best Practice
-    def get_virtual_machine_billing(self, months):
+    def get_virtual_machine_costs(self, months):
         """Get Virtual Machine Billing Data from Azure API
 
         Returns:
