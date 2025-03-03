@@ -1,15 +1,14 @@
-from django.http import JsonResponse
-from django.shortcuts import render, redirect
-from django.core.paginator import Paginator
 from django.conf import settings
+from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
 
-from .helper.serve_data import SubsData
+from nilakandi.models import Marketplace as MarketplacesModel
+from nilakandi.models import Services as ServicesModel
+from nilakandi.models import Subscription as SubscriptionsModel
+
 from .helper.azure_api import Auth, Services, Subscriptions
-from nilakandi.models import (
-    Subscription as SubscriptionsModel,
-    Marketplace as MarketplacesModel,
-    Services as ServicesModel,
-)
+from .helper.serve_data import SubsData
 
 # Create your views here.
 
@@ -27,9 +26,8 @@ def home(request):
             }
             for sub in SubscriptionsModel.objects.all()
         ],
-        "lastAdded": MarketplacesModel.objects.order_by("-added")
-        .first()
-        .added.strftime("%Y-%m-%d %H:%M:%S"),
+        "lastAdded": MarketplacesModel.objects.order_by("-added").first(),
+        # .added.strftime("%Y-%m-%d %H:%M:%S"),
     }
     return render(request=request, template_name="home.html", context=data)
 
