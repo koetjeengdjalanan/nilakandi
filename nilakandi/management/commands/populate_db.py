@@ -1,5 +1,4 @@
 from datetime import datetime as dt
-from time import sleep
 from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import relativedelta
@@ -29,7 +28,7 @@ class Command(BaseCommand):
             "--start-date",
             "-s",
             type=str,
-            default=(dt.now() - relativedelta(months=1)).date().isoformat(),
+            default=(dt.now() - relativedelta(days=364)).date().isoformat(),
             help="[string: yyyy-mm-dd] Start date for data gathering",
         )
         parser.add_argument(
@@ -53,8 +52,8 @@ class Command(BaseCommand):
             client_secret=settings.AZURE_CLIENT_SECRET,
             tenant_id=settings.AZURE_TENANT_ID,
         )
-        azure_api.Subscriptions(auth=auth).get().db_save()
-        for sub in subs.objects.all():
+        # azure_api.Subscriptions(auth=auth).get().db_save()
+        for sub in subs.objects.all()[4:]:
             print(sub.display_name, sub.subscription_id, sep=": ")
             services = (
                 Services(
@@ -68,32 +67,34 @@ class Command(BaseCommand):
             )
             print(services.res.data, sep="\n", end=f"\n{"="*100}>\n")
             while services.res.next_link:
-                retries = 0
-                try:
-                    nextUrl = services.res.next_link
-                    services.pull(uri=nextUrl).db_save()
-                    print(services.res.data, sep="\n", end=f"\n{"="*100}>\n")
-                except Exception as e:
-                    while services.res.status == 429 and retries < 5:
-                        if retries >= 6:
-                            raise e
-                        retries += 1
-                        print(
-                            f"Rate Limit Exceeded - Retry {retries}",
-                            services.res.headers,
-                            services.res.raw,
-                            f"sleeping for {services.res.headers['x-ms-ratelimit-microsoft.costmanagement-entity-retry-after']} seconds",
-                            sep="\n",
-                            end=f"\n{"="*100}>\n",
-                        )
-                        sleep(
-                            int(
-                                services.res.headers[
-                                    "x-ms-ratelimit-microsoft.costmanagement-entity-retry-after"
-                                ]
-                            )
-                        )
-                        services.pull(uri=nextUrl).db_save()
+                nextUrl = services.res.next_link
+                services.pull(uri=nextUrl).db_save()
+                print(services.res.data, sep="\n", end=f"\n{"="*100}>\n")
+                # retries = 0
+                # try:
+                # except RequestException as e:
+                #     if e.response.status_code != 429:
+                #         raise e
+                #     while services.res.status == 429 and retries < 5:
+                #         if retries >= 6:
+                #             raise e
+                #         retries += 1
+                #         print(
+                #             f"Rate Limit Exceeded - Retry {retries}",
+                #             services.res.headers,
+                #             services.res.raw,
+                #             f"sleeping for {services.res.headers['x-ms-ratelimit-microsoft.costmanagement-entity-retry-after']} seconds",
+                #             sep="\n",
+                #             end=f"\n{"="*100}>\n",
+                #         )
+                #         sleep(
+                #             int(
+                #                 services.res.headers[
+                #                     "x-ms-ratelimit-microsoft.costmanagement-entity-retry-after"
+                #                 ]
+                #             )
+                #         )
+                #         services.pull(uri=nextUrl).db_save()
 
             serviceCount = sub.services_set.count()
             print("Service Count: ", serviceCount)

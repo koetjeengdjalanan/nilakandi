@@ -5,10 +5,12 @@ from sys import stderr
 from zoneinfo import ZoneInfo as zi
 
 import pandas as pd
-from requests import post
+from requests import exceptions, post
+from tenacity import retry, retry_if_exception, stop_after_attempt
 
 from config.django.base import TIME_ZONE
 from nilakandi.azure.models import ApiResult
+from nilakandi.helper.miscellaneous import wait_retry_after
 from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
 
@@ -71,32 +73,41 @@ class Services:
             },
         }
 
+    @retry(
+        stop=stop_after_attempt(5),
+        reraise=True,
+        wait=wait_retry_after,
+        retry=retry_if_exception(
+            lambda e: isinstance(e, exceptions.HTTPError)
+            and e.response.status_code == 429
+        ),
+    )
     def pull(self, uri: str | None = None) -> "Services":
-        try:
-            reqRes = post(
-                url=self.uri if (uri is None) else uri,
-                params=self.params if (uri is None) else None,
-                headers=self.headers,
-                json=self.payload,
-            )
-            reqRes.raise_for_status()
-        except Exception as e:
-            print(
-                e.response.headers,
-                e.response.json(),
-                sep="\n",
-                end=f"\n{"="*100}\n",
-                file=stderr,
-            )
-            self.res: ApiResult = ApiResult(
-                status=reqRes.status_code,
-                headers=reqRes.headers,
-                data=pd.DataFrame(),
-                next_link=self.res.next_link,
-                raw=reqRes.json(),
-                meta=None,
-            )
-            raise Exception("Services Post Request Failed") from e
+        # try:
+        reqRes = post(
+            url=self.uri if (uri is None) else uri,
+            params=self.params if (uri is None) else None,
+            headers=self.headers,
+            json=self.payload,
+        )
+        reqRes.raise_for_status()
+        # except Exception as e:
+        #     print(
+        #         e.response.headers,
+        #         e.response.json(),
+        #         sep="\n",
+        #         end=f"\n{"="*100}\n",
+        #         file=stderr,
+        #     )
+        #     self.res: ApiResult = ApiResult(
+        #         status=reqRes.status_code,
+        #         headers=reqRes.headers,
+        #         data=pd.DataFrame(),
+        #         next_link=self.res.next_link,
+        #         raw=reqRes.json(),
+        #         meta=None,
+        #     )
+        #     raise Exception("Services Post Request Failed") from e
         res = reqRes.json().copy()
         columns = [
             sub(

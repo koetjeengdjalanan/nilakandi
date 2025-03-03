@@ -1,4 +1,5 @@
 import uuid
+
 from django.db import models
 
 
@@ -7,20 +8,21 @@ class Subscription(models.Model):
     id = models.CharField(primary_key=False, max_length=100, unique=True)
     display_name = models.CharField(max_length=64)
     state = models.CharField(max_length=16)
-    subscription_policies = models.JSONField(
-        null=True, default=dict, blank=True)
+    subscription_policies = models.JSONField(null=True, default=dict, blank=True)
     authorization_source = models.CharField(max_length=32)
-    additional_properties = models.JSONField(
-        null=True, default=dict, blank=True)
+    additional_properties = models.JSONField(null=True, default=dict, blank=True)
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
 
 
 class Services(models.Model):
-    id = models.UUIDField(
-        primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
-        to=Subscription, to_field='subscription_id', on_delete=models.RESTRICT, default=uuid.uuid4)
+        to=Subscription,
+        to_field="subscription_id",
+        on_delete=models.RESTRICT,
+        default=uuid.uuid4,
+    )
     usage_date = models.DateField()
     charge_type = models.CharField(max_length=16)
     service_name = models.CharField(max_length=128)
@@ -28,7 +30,7 @@ class Services(models.Model):
     meter = models.CharField(max_length=128)
     part_number = models.CharField(max_length=10)
     billing_month = models.DateField()
-    resource_id = models.CharField(max_length=256)
+    resource_id = models.CharField(max_length=1024)
     resource_type = models.CharField(max_length=128)
     cost_usd = models.FloatField()
     currency = models.CharField(max_length=4)
@@ -53,9 +55,18 @@ class Operation(models.Model):
 class Marketplace(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
-        to=Subscription, to_field='subscription_id', on_delete=models.RESTRICT, default=uuid.uuid4, db_comment="Originally called subscription_guid")
+        to=Subscription,
+        to_field="subscription_id",
+        on_delete=models.RESTRICT,
+        default=uuid.uuid4,
+        db_comment="Originally called subscription_guid",
+    )
     source_id = models.UUIDField(
-        default=uuid.uuid4, editable=True, null=True, db_comment="Originally called name")
+        default=uuid.uuid4,
+        editable=True,
+        null=True,
+        db_comment="Originally called name",
+    )
     name = models.CharField(max_length=255, db_comment="Originally called id")
     type = models.CharField(max_length=255)
     tags = models.JSONField(null=True, default=dict, blank=True)
@@ -67,7 +78,8 @@ class Marketplace(models.Model):
     resource_group = models.CharField(max_length=255)
     additional_info = models.JSONField(null=True, default=dict, blank=True)
     order_number = models.UUIDField(
-        default=uuid.uuid4, editable=True, null=True, blank=True)
+        default=uuid.uuid4, editable=True, null=True, blank=True
+    )
     instance_name = models.CharField(max_length=255, null=True)
     instance_id = models.CharField(max_length=255, null=True)
     currency = models.CharField(max_length=4, default="USD")
