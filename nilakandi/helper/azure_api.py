@@ -402,76 +402,53 @@ class VirtualMachines:
             subscription_id=self.subscription.subscription_id,
         )
 
-        network: NetworkManagementClient = NetworkManagementClient(
-            credential=self.auth.credential,
-            subscription_id=self.subscription.subscription_id,
-        )
-
         vm_data = []
 
         vms = client.virtual_machines.list_all()
 
         for vm in vms:
-            vm_name = vm.name
-            location = vm.location
-
-            tags = vm.tags
-            app_name = (
-                tags.get("Application Name") if tags else "No Application Name tag"
-            )
-
-            nic_id = vm.network_profile.network_interfaces[0].id
-            nic_name = nic_id.split("/")[-1]
-            resource_group = nic_id.split("/")[4]
-
-            nic = network.network_interfaces.get(resource_group, nic_name)
-
-            ip_config = nic.ip_configurations
-            private_ip = ip_config[0].private_ip_address
 
             # TODO : Append to Model
-            vm_data.append(
-                {
-                    # Subscription Data to identify which VM belongs to which Subscription
-                    "Subscription ID": self.subscription.subscription_id,
-                    "Subscription Name": self.subscription.display_name,
-                    # VM Data (Master)
-                    "VM ID": vm.id,
-                    "VM Name": vm_name,
-                    "VM Type": vm.type,
-                    "VM Location": location,
-                    "VM Plan": vm.plan,
-                    "VM Zones": vm.zones,
-                    "VM Extended Location": vm.extended_location,
-                    "VM Managed By": vm.managed_by,
-                    "VM Etag": vm.etag,
-                    # "Additional Properties": vm.additional_properties, #Object, might be useful later
-                    # "VM Tags": vm.tags, #Object, might be useful later
-                    # "VM Identity": vm.identity, #Array, might be useful later
-                    # "VM Resources": vm.resources, #Object, might be useful later
-                    # "VM Hardware Profile": vm.hardware_profile, #Object, might be useful later
-                    # "VM Storage Profile": vm.storage_profile, #Object, might be useful later
-                    # "VM OS Profile": vm.os_profile, #Object, might be useful later
-                    # "VM Network Profile": vm.network_profile, #Object, might be useful later
-                    # "VM Diagnostics Profile": vm.diagnostics_profile, #Object, might be useful later
-                    "VM Security Profile": vm.security_profile,
-                    "VM Availability Set": vm.availability_set,
-                    "VM Scale Set": vm.virtual_machine_scale_set,
-                    "VM Proximity Placement Group": vm.proximity_placement_group,
-                    "VM Priority": vm.priority,
-                    "VM Eviction Policy": vm.eviction_policy,
-                    "VM Billing Profile": vm.billing_profile,
-                    "VM License Type": vm.license_type,
-                    "VM Host": vm.host,
-                    "VM Host Group": vm.host_group,
-                    "VM Provisioning State": vm.provisioning_state,
-                    "Application Name": app_name,
-                    # NIC Data (Joined) - NIC Data is required to get Private IP as a description
-                    "Private IP": private_ip,
-                }
-            )
-
-            # self.res = vm_data
+            extracted_data = {
+                "name": vm.name,
+                "tags": vm.tags,
+                "resource_group": vm.id,
+                "location": vm.location,
+                "vm_id": vm.vm_id,
+                "provisioning_state": vm.provisioning_state,
+                "hardware_profile_vm_size": vm.hardware_profile.vm_size if vm.hardware_profile else None,
+                "image_reference_publisher": vm.storage_profile.image_reference.publisher if vm.storage_profile and vm.storage_profile.image_reference else None,
+                "image_reference_offer": vm.storage_profile.image_reference.offer if vm.storage_profile and vm.storage_profile.image_reference else None,
+                "image_reference_sku": vm.storage_profile.image_reference.sku if vm.storage_profile and vm.storage_profile.image_reference else None,
+                "image_reference_version": vm.storage_profile.image_reference.version if vm.storage_profile and vm.storage_profile.image_reference else None,
+                "os_disk_name": vm.storage_profile.os_disk.name if vm.storage_profile and vm.storage_profile.os_disk else None,
+                "os_disk_caching": vm.storage_profile.os_disk.caching if vm.storage_profile and vm.storage_profile.os_disk else None,
+                "os_disk_create_option": vm.storage_profile.os_disk.create_option if vm.storage_profile and vm.storage_profile.os_disk else None,
+                "os_disk_managed_disk_id": vm.storage_profile.os_disk.managed_disk.id if vm.storage_profile and vm.storage_profile.os_disk and vm.storage_profile.os_disk.managed_disk else None,
+                "os_disk_managed_disk_storage_account_type": vm.storage_profile.os_disk.managed_disk.storage_account_type if vm.storage_profile and vm.storage_profile.os_disk and vm.storage_profile.os_disk.managed_disk else None,
+                "os_disk_size_gb": vm.storage_profile.os_disk.disk_size_gb if vm.storage_profile and vm.storage_profile.os_disk else None,
+                "os_disk_delete_option": vm.storage_profile.os_disk.delete_option if vm.storage_profile and vm.storage_profile.os_disk else None,
+                "data_disks": vm.storage_profile.data_disks if  vm.storage_profile.data_disks else None,
+                "computer_name": vm.os_profile.computer_name if vm.os_profile else None,
+                "admin_username": vm.os_profile.admin_username if vm.os_profile else None,
+                "network_interfaces_ids": ", ".join([nic.id for nic in vm.network_profile.network_interfaces]) if vm.network_profile and vm.network_profile.network_interfaces else None,
+                "boot_diagnostics_enabled": vm.diagnostics_profile.boot_diagnostics.enabled if vm.diagnostics_profile and vm.diagnostics_profile.boot_diagnostics else None,
+                "boot_diagnostics_storage_uri": vm.diagnostics_profile.boot_diagnostics.storage_uri if vm.diagnostics_profile and vm.diagnostics_profile.boot_diagnostics else None,
+                "identity_type": vm.identity.type if vm.identity else None,
+                "zones": vm.zones if vm.zones else None,
+                "plan_name": vm.plan.name if vm.plan else None,
+                "availability_set_id": vm.availability_set.id if vm.availability_set else None,
+                "virtual_machine_scale_set_id": vm.virtual_machine_scale_set.id if vm.virtual_machine_scale_set else None,
+                "proximity_placement_group_id": vm.proximity_placement_group.id if vm.proximity_placement_group else None,
+                "priority": vm.priority,
+                "eviction_policy": vm.eviction_policy,
+                "license_type": vm.license_type,
+                "host_id": vm.host.id if vm.host else None,
+                "host_group_id": vm.host_group.id if vm.host_group else None,
+                "extensions_time_budget": vm.extensions_time_budget,
+                "platform_fault_domain": vm.platform_fault_domain,
+            }
+            vm_data.append(extracted_data)
 
         return self
 
