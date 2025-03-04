@@ -380,7 +380,13 @@ class Marketplaces:
 
 
 class VirtualMachines:
-    def __init__(self, auth: Auth, subscription: SubscriptionsModel) -> None:
+    def __init__(
+        self, 
+        auth: Auth, 
+        subscription: SubscriptionsModel, 
+        end_date: dt = dt.now(ZoneInfo(TIME_ZONE)),
+        start_date: dt | None = None,
+    ) -> None:
         """Class Initializer
 
         Args:
@@ -389,6 +395,8 @@ class VirtualMachines:
         """
         self.auth = auth
         self.subscription: SubscriptionsModel = subscription
+        self.startDate = start_date if start_date else end_date - timedelta(days=7)
+        self.endDate = end_date
 
     # TODO : Implement Best Practice
     def get_virtual_machines(self):
@@ -481,12 +489,10 @@ class VirtualMachines:
             "SubscriptionId",
             "SubscriptionName",
         ]
-        
-        start_date, end_date = months
-        
+
         time_period = QueryTimePeriod(
-            from_property=start_date,  # Convert datetime to ISO format
-            to=end_date,  # Convert datetime to ISO format
+            from_property=self.startDate,  # Convert datetime to ISO format
+            to=self.endDate,  # Convert datetime to ISO format
         )
         
         dataset = QueryDataset(
@@ -514,10 +520,6 @@ class VirtualMachines:
         )
 
         return self
-    
-    # TODO : Pass this function to get virtual machine billing (Based on debug, we need another function to get the billing range)
-    def months_function():
-        ...
 
     # TODO : Not sure what to do in this function
     def db_save(self):
