@@ -106,7 +106,7 @@ class Marketplace(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
 
-class VirtualMachine(models.Model):
+class VirtualMachine(models.Model):    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
