@@ -11,7 +11,10 @@
                 "terminal.integrated.shell.linux": "/bin/bash"
             },
             "extensions": [
-                "ms-python.python"
+                "ms-python.python",
+                "ms-python.isort",
+                "charliermarsh.ruff",
+                "ms-python.black-formatter"
             ]
         }
     }
