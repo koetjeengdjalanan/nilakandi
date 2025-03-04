@@ -11,10 +11,16 @@ from nilakandi.models import (
     Services as ServicesModel,
 )
 
+import logging
+
+logger = logging.getLogger("django")
+
 # Create your views here.
 
 
 def home(request):
+    logger.debug("Halaman Home diakses oleh: %s",  request.user)
+
     print(request.user)
     data = {
         "user": "Admin",
@@ -35,6 +41,8 @@ def home(request):
 
 
 def subscriptions(request):
+    logger.debug("Endpoint /subscriptions diakses")
+
     subs = SubscriptionsModel.objects.all()
     data = {
         "subs": subs,
