@@ -1,7 +1,7 @@
 from datetime import datetime as dt
 from datetime import timedelta
 from re import sub
-from sys import stderr
+from uuid import UUID
 from zoneinfo import ZoneInfo as zi
 
 import pandas as pd
@@ -16,20 +16,39 @@ from nilakandi.models import Subscription as SubscriptionsModel
 
 
 class Services:
+    """Services class to pull data from Azure API and save it to the database."""
+
     def __init__(
         self,
         bearer_token: str,
-        subscription: SubscriptionsModel,
+        subscription: SubscriptionsModel | UUID,
         base_url: str = "https://management.azure.com",
         end_date: dt = dt.now(tz=zi(TIME_ZONE)),
         start_date: dt | None = None,
     ):
+        """Initialize the Services class.
+
+        Args:
+            bearer_token (str): berarer token for the Azure API. <JWT>
+            subscription (SubscriptionsModel | UUID): Subscription model or UUID of the subscription.
+            base_url (str, optional): The URL of main request. Defaults to "https://management.azure.com".
+            end_date (dt, optional): End date of data gathered. Defaults to dt.now(tz=zi(TIME_ZONE)).
+            start_date (dt | None, optional): Start date of data gathered. Defaults to None.
+
+        Raises:
+            ValueError: Date deltas must be within 1 year.
+            ValueError: start_date must be less than end_date.
+        """
         if end_date - start_date > timedelta(days=365):
             raise ValueError("Date range must be within 1 year")
         if end_date < start_date:
             raise ValueError("End date must be greater than start date")
         self.bearer_token: str = bearer_token
-        self.subscription: SubscriptionsModel = subscription
+        self.subscription: SubscriptionsModel = (
+            subscription
+            if isinstance(subscription, SubscriptionsModel)
+            else SubscriptionsModel.objects.get(subscription_id=subscription)
+        )
         self.end_date: dt = end_date
         self.res = None
         self.start_date: dt = (
@@ -83,7 +102,14 @@ class Services:
         ),
     )
     def pull(self, uri: str | None = None) -> "Services":
-        # try:
+        """Pulling data from Microsoft Azure API using REST
+
+        Args:
+            uri (str | None, optional): URL, If provided will replace the class declared uri. Defaults to None.
+
+        Returns:
+            Services: Services class object.
+        """
         reqRes = post(
             url=self.uri if (uri is None) else uri,
             params=self.params if (uri is None) else None,
@@ -91,23 +117,6 @@ class Services:
             json=self.payload,
         )
         reqRes.raise_for_status()
-        # except Exception as e:
-        #     print(
-        #         e.response.headers,
-        #         e.response.json(),
-        #         sep="\n",
-        #         end=f"\n{"="*100}\n",
-        #         file=stderr,
-        #     )
-        #     self.res: ApiResult = ApiResult(
-        #         status=reqRes.status_code,
-        #         headers=reqRes.headers,
-        #         data=pd.DataFrame(),
-        #         next_link=self.res.next_link,
-        #         raw=reqRes.json(),
-        #         meta=None,
-        #     )
-        #     raise Exception("Services Post Request Failed") from e
         res = reqRes.json().copy()
         columns = [
             sub(
@@ -134,6 +143,14 @@ class Services:
         return self
 
     def db_save(self) -> "Services":
+        """Save gathered data to DB
+
+        Raises:
+            ValueError: Response data is not available or result is empty.
+
+        Returns:
+            Services: Services class object.
+        """
         if not isinstance(self.res, ApiResult):
             raise ValueError("No data to save")
         data: list[ServicesModel] = [

@@ -28,7 +28,7 @@ class Services(models.Model):
     service_name = models.CharField(max_length=128)
     service_tier = models.CharField(max_length=128)
     meter = models.CharField(max_length=128)
-    part_number = models.CharField(max_length=10)
+    part_number = models.CharField(max_length=16)
     billing_month = models.DateField()
     resource_id = models.CharField(max_length=1024)
     resource_type = models.CharField(max_length=128)
