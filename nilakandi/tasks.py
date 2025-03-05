@@ -1,64 +1,72 @@
+from datetime import datetime, timedelta
 from time import sleep
-from celery import shared_task
-from datetime import datetime as dt, timezone, timedelta
 from uuid import UUID
 
-from nilakandi.models import Subscription as SubscriptionsModel
+from celery import shared_task
+
+from nilakandi.azure.api.services import Services
 from nilakandi.helper import azure_api as azi
+from nilakandi.helper.miscellaneous import yearly_list
+from nilakandi.models import Subscription as SubscriptionsModel
 
 
 @shared_task(name="nilakandi.tasks.grab_services")
-def grab_services(creds: dict[str, str], subscription_id: UUID, start_date: dt.date, end_date: dt.date, skip_existing: bool = False) -> None:
+def grab_services(
+    bearer: str,
+    subscription_id: UUID,
+    start_date: datetime,
+    end_date: datetime,
+    skip_existing: bool = False,
+) -> None:
     """Grab Services data from Azure API with the given parameters.
 
     Args:
-        creds (dict[str, str]): Azure API credentials dictionary.
+        bearer (str): Bearer token for the Azure API.
         subscription_id (UUID): Subscription ID.
-        start_date (dt.date): Start Date for the data gathering.
-        end_date (dt.date): End date for the data gathering.
-        skip_existing (bool, optional): Skip if data is existed in the databases. Defaults to False.
+        start_date (datetime): date to start the data gathering.
+        end_date (datetime): date to end the data gathering.
+        skip_existing (bool, optional): Skip data if existed in DB. Defaults to False.
 
     Raises:
-        NotImplementedError: skip_existing=True is not implemented yet.
+        NotImplementedError: skip_existing is not implemented yet.
     """
     if skip_existing:
         raise NotImplementedError("skip_existing=True is not implemented yet.")
-    auth = azi.Auth(
-        client_id=creds['client_id'],
-        tenant_id=creds['tenant_id'],
-        client_secret=creds['client_secret']
-    )
-    sub = SubscriptionsModel.objects.get(subscription_id=subscription_id)
-    # earliest: dt.date = sub.services_set.earliest('usage_date').usage_date
-    # latest: dt.date = sub.services_set.latest('usage_date').usage_date
-    loopedDate = start_date
-    while loopedDate <= end_date:
-        deltaDays: int = 3 if (
-            end_date - start_date).days >= 3 else (end_date - start_date).days
-        tempDate = loopedDate + timedelta(days=deltaDays)
-        # TODO: Implement skip_existing
-        # if skip_existing and (loopedDate >= earliest) and (tempDate <= latest):
-        #     continue
-        services = azi.Services(
-            auth=auth,
-            subscription=sub,
-            start_date=loopedDate,
-            end_date=tempDate,
+    dates = yearly_list(start_date, end_date)
+    for date in dates:
+        start_date, end_date = date
+        services = (
+            Services(
+                bearer_token=bearer,
+                subscription=subscription_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            .pull()
+            .db_save()
         )
-        services.get().db_save()
-        sleep(.75)
-        loopedDate += timedelta(days=deltaDays+1)
+        # TODO: Implement Logging
+        while services.res.next_link:
+            nextUrl = services.res.next_link
+            services.pull(uri=nextUrl).db_save()
+            # TODO: Implement Logging
 
 
 @shared_task(name="nilakandi.tasks.grab_marketplaces")
-def grab_marketplaces(creds: dict[str, str], subscription_id: UUID, start_date: dt.date, end_date: dt.date, skip_existing: bool = False) -> None:
+def grab_marketplaces(
+    creds: dict[str, str],
+    subscription_id: UUID,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    skip_existing: bool = False,
+) -> None:
     """Grab Marketplaces data from Azure API with the given parameters.
 
     Args:
         creds (dict[str, str]): Azure API credentials dictionary.
         subscription_id (UUID): Subscription ID.
-        start_date (dt.date): Start Date for the data gathering.
-        end_date (dt.date): End date for the data gathering.
+        start_date (datetime.date): Start Date for the data gathering.
+        end_date (datetime.date): End date for the data gathering.
         skip_existing (bool, optional): Skip if data is existed in the databases. Defaults to False.
 
     Raises:
@@ -67,17 +75,18 @@ def grab_marketplaces(creds: dict[str, str], subscription_id: UUID, start_date: 
     if skip_existing:
         raise NotImplementedError("skip_existing=True is not implemented yet.")
     auth = azi.Auth(
-        client_id=creds['client_id'],
-        tenant_id=creds['tenant_id'],
-        client_secret=creds['client_secret']
+        client_id=creds["client_id"],
+        tenant_id=creds["tenant_id"],
+        client_secret=creds["client_secret"],
     )
     sub = SubscriptionsModel.objects.get(subscription_id=subscription_id)
-    # earliest: dt.date = sub.marketplace_set.earliest('usage_start').usage_start
-    # latest: dt.date = sub.marketplace_set.latest('usage_end').usage_end
+    # earliest: datetime.date = sub.marketplace_set.earliest('usage_start').usage_start
+    # latest: datetime.date = sub.marketplace_set.latest('usage_end').usage_end
     loopedDate = start_date
     while loopedDate <= end_date:
-        deltaDays: int = 3 if (
-            end_date - start_date).days >= 3 else (end_date - start_date).days
+        deltaDays: int = (
+            3 if (end_date - start_date).days >= 3 else (end_date - start_date).days
+        )
         tempDate = loopedDate + timedelta(days=deltaDays)
         marketplace = azi.Marketplaces(
             auth=auth,
@@ -86,5 +95,5 @@ def grab_marketplaces(creds: dict[str, str], subscription_id: UUID, start_date: 
             end_date=tempDate,
         )
         marketplace.get().db_save()
-        sleep(.75)
-        loopedDate += timedelta(days=deltaDays+1)
+        sleep(0.75)
+        loopedDate += timedelta(days=deltaDays + 1)

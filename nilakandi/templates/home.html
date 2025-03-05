@@ -1,28 +1,32 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block title %}
   Home Page
-{% endblock %}
+{% endblock title %}
 {% block content %}
-  <h1>Home Page</h1>
-  <p>Welcome to the home page of Nilakandi.</p>
-  <hr />
-  <h2>Count of Data By Subscription</h2>
-  <table class="table table-striped">
-    <thead>
-      <tr>
-        <th scope="col">Display Name</th>
-        <th scope="col">Services</th>
-        <th scope="col">Marketplace</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in countTable %}
+  <div class="container">
+    <h1>Home Page</h1>
+    <p>Welcome to the home page of Nilakandi.</p>
+    <hr />
+    <h2>Count of Data By Subscription</h2>
+    <table class="table table-striped">
+      <thead>
         <tr>
-          <td><a href="{% url 'subscription details' item.subsId %}">{{ item.name }}</a></td>
-          <td>{{ item.service }}</td>
-          <td>{{ item.marketplace }}</td>
+          <th scope="col">Display Name</th>
+          <th scope="col">Services</th>
+          <th scope="col">Marketplace</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-{% endblock %}
+      </thead>
+      <tbody>
+        {% for item in countTable %}
+          <tr>
+            <td>
+              <a href="{% url 'subscription details' item.subsId %}">{{ item.name }}</a>
+            </td>
+            <td>{{ item.service }}</td>
+            <td>{{ item.marketplace }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock content %}
