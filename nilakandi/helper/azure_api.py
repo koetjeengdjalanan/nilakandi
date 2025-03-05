@@ -1,24 +1,31 @@
-from re import sub
-from datetime import datetime as dt, timedelta
 import uuid
+from datetime import datetime as dt
+from datetime import timedelta
+from re import sub
+from typing import Iterable
+from zoneinfo import ZoneInfo
+
+import requests
 from azure.identity import ClientSecretCredential
 from azure.mgmt.consumption import ConsumptionManagementClient
+from azure.mgmt.consumption.models import MarketplacesListResult
+from azure.mgmt.consumption.operations import MarketplacesOperations
 from azure.mgmt.costmanagement import CostManagementClient
-from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.costmanagement.models import (
-    QueryDefinition,
-    QueryDataset,
     QueryAggregation,
+    QueryDataset,
+    QueryDefinition,
     QueryGrouping,
-    QueryTimePeriod,
     QueryResult,
+    QueryTimePeriod,
 )
+from azure.mgmt.subscription import SubscriptionClient
+from pandas import DataFrame
 
-from nilakandi.models import (
-    Subscription as SubscriptionsModel,
-    Services as ServicesModel,
-    Marketplace as MarketplacesModel,
-)
+from config.django.base import TIME_ZONE
+from nilakandi.models import Marketplace as MarketplacesModel
+from nilakandi.models import Services as ServicesModel
+from nilakandi.models import Subscription as SubscriptionsModel
 
 
 class Auth:
@@ -46,15 +53,13 @@ class Auth:
 
 
 class Services:
-    """
-    Azure API Services class to get data from Azure API
-    """
+    """Azure API Services class to get data from Azure API"""
 
     def __init__(
         self,
         auth: Auth,
         subscription: SubscriptionsModel,
-        end_date: dt = dt.now(),
+        end_date: dt = dt.now(ZoneInfo(TIME_ZONE)),
         start_date: dt | None = None,
     ) -> None:
         self.auth = auth
@@ -63,7 +68,11 @@ class Services:
         self.endDate = end_date
 
     def get(self) -> "Services":
-        """Get data from Azure API"""
+        """Get from Azure API
+
+        Returns:
+            Services: Azure API Services object
+        """
         client = CostManagementClient(credential=self.auth.credential)
         self.scope = self.subscription.id
         self.query = QueryDefinition(
@@ -85,60 +94,116 @@ class Services:
                     QueryGrouping(name="ServiceTier", type="Dimension"),
                     QueryGrouping(name="Meter", type="Dimension"),
                     QueryGrouping(name="PartNumber", type="Dimension"),
+                    QueryGrouping(name="BillingMonth", type="Dimension"),
+                    QueryGrouping(name="ResourceId", type="Dimension"),
+                    QueryGrouping(name="ResourceType", type="Dimension"),
+                    # QueryGrouping(name="VM Name", type="TagKey"),
                 ],
             ),
         )
-        self.clientale: QueryResult = client.query
-        self.res = self.clientale.usage(scope=self.scope, parameters=self.query)
+        self.clientale = client.query
+        self.queryRes: QueryResult = self.clientale.usage(
+            scope=self.scope, parameters=self.query
+        )
+        self.nextLink: str = self.queryRes.next_link
+        self.res: DataFrame = DataFrame(
+            data=self.queryRes.rows,
+            columns=[
+                sub(
+                    r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col.name
+                ).lower()
+                for col in self.queryRes.columns
+            ],
+        )
         return self
 
-    def db_save(self) -> "Services":
-        if not self.res or self.res is None:
-            raise ValueError("No data to save")
-        data: list[ServicesModel] = []
-        cols = [
-            sub(r"(?<!^)(?=[A-Z])", "_", col.name).lower() for col in self.res.columns
-        ]
-        cols[cols.index("cost_u_s_d")] = "cost_usd"
-        for item in self.res.rows:
-            if "usage_date" in cols and item[cols.index("usage_date")]:
-                dateIs = dt.strptime(str(item[cols.index("usage_date")]), "%Y%m%d")
-            else:
-                dateIs = dt.now()
-            data.append(
-                ServicesModel(
-                    subscription=self.subscription,
-                    usage_date=dateIs,
-                    charge_type=(
-                        item[cols.index("charge_type")]
-                        if "charge_type" in cols
-                        else None
+    def next(self, next_uri: str | None = None) -> "Services":
+        if (not self.nextLink) or (self.nextLink is None):
+            raise ValueError("No next link")
+        payload = {
+            "type": "ActualCost",
+            "timeframe": "Custom",
+            "timePeriod": {
+                "from": self.query.time_period.as_dict()["from_property"],
+                "to": self.query.time_period.as_dict()["to"],
+            },
+            "dataset": self.query.dataset.as_dict(),
+        }
+        try:
+            apiRes = requests.post(
+                url=self.nextLink if not next_uri else next_uri,
+                headers={
+                    "Authorization": f"Bearer {self.auth.token.token}",
+                    "Content-Type": "application/json",
+                    "User-Agent": str(
+                        self.clientale._config.user_agent_policy._user_agent
                     ),
-                    service_name=(
-                        item[cols.index("service_name")]
-                        if "service_name" in cols
-                        else None
-                    ),
-                    service_tier=(
-                        item[cols.index("service_tier")]
-                        if "service_tier" in cols
-                        else None
-                    ),
-                    meter=item[cols.index("meter")] if "meter" in cols else None,
-                    part_number=(
-                        item[cols.index("part_number")]
-                        if "part_number" in cols
-                        else None
-                    ),
-                    cost_usd=(
-                        item[cols.index("cost_usd")] if "cost_usd" in cols else None
-                    ),
-                    currency=(
-                        item[cols.index("currency")] if "currency" in cols else None
-                    ),
-                )
+                },
+                json=payload,
             )
-        ServicesModel.objects.bulk_create(data, batch_size=500)
+            apiRes.raise_for_status()
+        except requests.HTTPError as e:
+            raise e
+        next_res = apiRes.json()
+        self.nextLink: str = next_res["properties"]["nextLink"]
+        self.res: DataFrame = DataFrame(
+            next_res["properties"]["rows"],
+            columns=[
+                sub(
+                    r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col["name"]
+                ).lower()
+                for col in next_res["properties"]["columns"]
+            ],
+        )
+        return self
+
+    def db_save(
+        self,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = True,
+        check_conflic_on_create: bool = True,
+    ) -> "Services":
+        """Save data to DB
+
+        Args:
+            ignore_conflicts (bool, optional): Should DB ignore conficted data. Defaults to False.
+            update_conflicts (bool, optional): Should DB update conflicted data. Defaults to True.
+            check_conflic_on_create (bool, optional): If data confilcting should it be updated. Defaults to True.
+
+        Returns:
+            Services: Azure API Services object
+        """
+        if not isinstance(self.res, DataFrame) or self.res.empty:
+            print(f"Data: {self.res.head(5)}")
+            raise ValueError("No data to save")
+        data: list[ServicesModel] = [
+            ServicesModel(
+                subscription=self.subscription,
+                usage_date=dt.strptime(str(row["usage_date"]), "%Y%m%d"),
+                charge_type=row["charge_type"],
+                service_name=row["service_name"],
+                service_tier=row["service_tier"],
+                meter=row["meter"],
+                part_number=row["part_number"],
+                billing_month=dt.fromisoformat(row["billing_month"]).date(),
+                resource_id=row["resource_id"],
+                resource_type=row["resource_type"],
+                cost_usd=row["cost_usd"],
+                currency=row["currency"],
+            )
+            for index, row in self.res.iterrows()
+        ]
+        if check_conflic_on_create:
+            ServicesModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
+                unique_fields=["usage_date", "service_name", "service_tier", "meter"],
+                update_fields=["charge_type", "part_number", "cost_usd", "currency"],
+            )
+        else:
+            ServicesModel.objects.bulk_create(data, batch_size=500)
         return self
 
     def __dict__(self) -> dict:
@@ -146,8 +211,8 @@ class Services:
 
 
 class Subscriptions:
-    """
-    Subscriptions class to get all subscriptions from Azure API
+    """Subscriptions class to get all subscriptions from Azure API
+    use Azure API SubscriptionClient
     """
 
     def __init__(self, auth: Auth) -> None:
@@ -162,7 +227,7 @@ class Subscriptions:
         """Get Data from Azure API
 
         Returns:
-            Subscriptions: Subscriptions object
+            Subscriptions: Azure Api Subscriptions object
         """
         client = SubscriptionClient(credential=self.auth.credential)
         self.res = [item.as_dict() for item in client.subscriptions.list()]
@@ -187,25 +252,53 @@ class Subscriptions:
 
 
 class Marketplaces:
+    """Azure API Marketplaces class to get data
+    use Azure API ConsumptionManagementClient
+    """
+
     def __init__(
-        self, auth: Auth, subscription: SubscriptionsModel, date: dt = dt.now()
+        self,
+        auth: Auth,
+        subscription: SubscriptionsModel,
+        date: dt = dt.now(ZoneInfo(TIME_ZONE)),
     ) -> None:
         self.auth: Auth = auth
         self.subscription: SubscriptionsModel = subscription
         self.yearMonth: str = date.strftime("%Y%m")
 
     def get(self) -> "Marketplaces":
-        client = ConsumptionManagementClient(
+        """Get from Azure API
+
+        Returns:
+            Marketplaces: Azure API Marketplaces object
+        """
+        client: ConsumptionManagementClient = ConsumptionManagementClient(
             credential=self.auth.credential,
             subscription_id=self.subscription.subscription_id,
         )
-        self.clientale = client.marketplaces
-        self.res = self.clientale.list(
+        self.clientale: MarketplacesOperations = client.marketplaces
+        self.res: Iterable[MarketplacesListResult] = self.clientale.list(
             scope=f"/subscriptions/{self.subscription.subscription_id}/providers/Microsoft.Billing/billingPeriods/{self.yearMonth}"
         )
         return self
 
-    def db_save(self) -> "Marketplaces":
+    def db_save(
+        self,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = True,
+        check_conflic_on_create: bool = True,
+    ) -> "Marketplaces":
+        """Save data to DB
+
+        Args:
+            ignore_conflicts (bool, optional): Should DB ignore conficted data. Defaults to False.
+            update_conflicts (bool, optional): Should DB update conflicted data. Defaults to True.
+            check_conflic_on_create (bool, optional): If data confilcting should it be updated. Defaults to True.
+
+        Returns:
+            Marketplaces: Azure API Marketplaces object
+        """
+
         def get_uuid(value):
             try:
                 return str(uuid.UUID(value)) if value else None
@@ -214,6 +307,14 @@ class Marketplaces:
 
         if self.res is None or not self.res:
             raise ValueError("No data to save")
+        # This is not best practice but it works and I am lazy
+        uniqueFields = [
+            "usage_start",
+            "instance_name",
+            "subscription_name",
+            "publisher_name",
+            "plan_name",
+        ]
         data: list[MarketplacesModel] = []
         for item in self.res:
             raw = item.as_dict() if hasattr(item, "as_dict") else vars(item)
@@ -249,5 +350,24 @@ class Marketplaces:
                     is_recurring_charge=raw.get("is_recurring_charge"),
                 )
             )
-        MarketplacesModel.objects.bulk_create(data, batch_size=500)
+        if check_conflic_on_create:
+            MarketplacesModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
+                unique_fields=uniqueFields,
+                update_fields=[
+                    col
+                    for col in MarketplacesModel._meta.get_fields()
+                    if col.name not in uniqueFields
+                ],
+            )
+        else:
+            MarketplacesModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
+            )
         return self
