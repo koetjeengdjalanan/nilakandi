@@ -5,8 +5,7 @@ import logging.handlers
 # Logging configuration
 # https://docs.djangoproject.com/en/5.1/topics/logging/
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-LOG_DIR = env("LOG_DIRECTORY", default="/var/log/nilakandi")
+LOG_DIR = Path(env("LOG_DIRECTORY", default="/var/log/nilakandi"))
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -10,16 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+from config.settings.logging import LOGGING
 import os
 from config.env import env, BASE_DIR
 
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
-
 from config.settings.azure import *  # noqa: E402, F403
 from config.settings.celery import *  # noqa: E402, F403
 from config.settings.redis import *  # noqa: E402, F403
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -126,7 +125,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE: str = env("TIME_ZONE", default="UTC")
+TIME_ZONE = env("TIME_ZONE", default="UTC")
 
 USE_I18N = True
 
@@ -142,8 +141,3 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-from config.settings.azure import *  # noqa: E402, F403
-from config.settings.celery import *  # noqa: E402, F403
-from config.settings.redis import *  # noqa: E402, F403
-
