@@ -1,24 +1,25 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8">
+    <meta name="description" content="Azure Report Automation">
     <title>
       {% block title %}
         Nilakandi
-      {% endblock %}
+      {% endblock title %}
     </title>
     {% load bootstrap5 %}
     {% bootstrap_css %}
     {% bootstrap_javascript %}
   </head>
   <body>
-    <div class="container">
-      {% include 'navbar.html' %}
-      <br/>
-      <br/>
-      <br/>
-      {% block content %}
-
-      {% endblock %}
-    </div>
+    {% include "navbar.html" %}
+    {% comment %} <div class="container">
+      <br />
+      <br />
+      <br />
+    </div> {% endcomment %}
+    {% block content %}
+    {% endblock content %}
   </body>
 </html>
