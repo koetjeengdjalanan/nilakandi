@@ -29,8 +29,8 @@ class Services(models.Model):
     meter = models.CharField(max_length=128)
     part_number = models.CharField(max_length=10)
     billing_month = models.DateField(default=datetime.date.today)
-    resource_id = models.CharField(max_length=256)
-    resource_type = models.CharField(max_length=128)
+    resource_id = models.CharField(max_length=256, null=True, blank=True)
+    resource_type = models.CharField(max_length=128, null=True, blank=True)
     cost_usd = models.FloatField()
     currency = models.CharField(max_length=4)
     last_edited = models.DateTimeField(auto_now=True)
@@ -117,8 +117,10 @@ class VirtualMachine(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
 
-class BillingVirtualMachine(models.Model):
+class Billing(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subscription = models.ForeignKey(
+        to=Subscription, to_field='subscription_id', on_delete=models.RESTRICT, default=uuid.uuid4, db_comment="Originally called subscription_guid")
     resource_id = models.CharField(max_length=128, null=True)
     resource_type = models.CharField(max_length=64)
     resource_group = models.CharField(max_length=128)
@@ -131,7 +133,6 @@ class BillingVirtualMachine(models.Model):
     meter_sub_category = models.CharField(max_length=255)
     meter = models.CharField(max_length=255)
     department_name = models.CharField(max_length=255)
-    subscription_id = models.CharField(max_length=64)
     subscription_name = models.CharField(max_length=128)
     currency = models.CharField(max_length=4)
     billing_month = models.DateField(default=datetime.date.today)
