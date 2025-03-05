@@ -1,4 +1,5 @@
 import uuid
+import datetime
 from django.db import models
 
 
@@ -21,13 +22,13 @@ class Services(models.Model):
         primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription, to_field='subscription_id', on_delete=models.RESTRICT, default=uuid.uuid4)
-    usage_date = models.DateField()
+    usage_date = models.DateField(default=datetime.date.today)
     charge_type = models.CharField(max_length=16)
     service_name = models.CharField(max_length=128)
     service_tier = models.CharField(max_length=128)
     meter = models.CharField(max_length=128)
     part_number = models.CharField(max_length=10)
-    billing_month = models.DateField()
+    billing_month = models.DateField(default=datetime.date.today)
     resource_id = models.CharField(max_length=256)
     resource_type = models.CharField(max_length=128)
     cost_usd = models.FloatField()
@@ -117,20 +118,23 @@ class VirtualMachine(models.Model):
 
 
 class BillingVirtualMachine(models.Model):
-    resource_id = models.CharField(64)
-    resource_type = models.CharField(64)
-    resource_group = models.CharField(64)
-    service_name = models.CharField(64)
-    resource_group_name = models.CharField(64)
-    resource_location = models.CharField(64)
-    consumed_service = models.CharField(64)
-    meter_id = models.CharField(64)
-    meter_category = models.CharField(64)
-    meter_sub_category = models.CharField(64)
-    meter = models.CharField(64)
-    department_name = models.CharField(64)
-    subscription_id = models.CharField(64)
-    subscription_name = models.CharField(64)
-    billing_month = models.CharField(64)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    resource_id = models.CharField(max_length=128, null=True)
+    resource_type = models.CharField(max_length=64)
+    resource_group = models.CharField(max_length=128)
+    service_name = models.CharField(max_length=128)
+    resource_group_name = models.CharField(max_length=128)
+    resource_location = models.CharField(max_length=64)
+    consumed_service = models.CharField(max_length=128)
+    meter_id = models.CharField(max_length=64)
+    meter_category = models.CharField(max_length=255)
+    meter_sub_category = models.CharField(max_length=255)
+    meter = models.CharField(max_length=255)
+    department_name = models.CharField(max_length=255)
+    subscription_id = models.CharField(max_length=64)
+    subscription_name = models.CharField(max_length=128)
+    currency = models.CharField(max_length=4)
+    billing_month = models.DateField(default=datetime.date.today)
+    pretax_cost = models.FloatField()
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
