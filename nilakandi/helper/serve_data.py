@@ -29,12 +29,7 @@ class SubsData:
             margins=True,
             margins_name="Grand Total",
         )
-        table = table.rename_axis(None, axis=1)
-        sorted_cols = sorted(
-            [col for col in table.columns if col != "Grand Total"],
-            key=lambda x: pd.to_datetime(x, format="%B %Y"),
-        ) + ["Grand Total"]
-        return table[sorted_cols]
+        return table
 
     def marketplace(self) -> pd.DataFrame:
         if self.marketplaces.empty:
@@ -55,9 +50,4 @@ class SubsData:
             margins=True,
             margins_name="Grand Total",
         )
-        table = table.rename_axis(None, axis=1)
-        sorted_cols = sorted(
-            [col for col in table.columns if col != "Grand Total"],
-            key=lambda x: pd.to_datetime(x, format="%B %Y"),
-        ) + ["Grand Total"]
-        return table[sorted_cols]
+        return table
