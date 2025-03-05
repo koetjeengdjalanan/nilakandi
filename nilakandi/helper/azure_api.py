@@ -33,11 +33,13 @@ from azure.mgmt.subscription import SubscriptionClient
 from pandas import DataFrame, notna, to_datetime
 
 from config.django.base import TIME_ZONE
-from nilakandi.models import Billing as BillingModel
-from nilakandi.models import Marketplace as MarketplacesModel
-from nilakandi.models import Services as ServicesModel
-from nilakandi.models import Subscription as SubscriptionsModel
-from nilakandi.models import VirtualMachine as VirtualMachineModel
+from nilakandi.models import (
+    Subscription as SubscriptionsModel,
+    Services as ServicesModel,
+    Marketplace as MarketplacesModel,
+    VirtualMachine as VirtualMachineModel,
+    Billing as BillingModel,
+)
 
 
 class Auth:
@@ -446,6 +448,7 @@ class Marketplaces:
 
 
 class Billing:
+class Billing:
     def __init__(
         self,
         auth: Auth,
@@ -720,10 +723,11 @@ class VirtualMachines:
 
     # TODO : Implement Best Practice
     def get_virtual_machine_billing(self, months):
+    def get(self):
         """Get Virtual Machine Billing Data from Azure API
 
         Returns:
-            VirtualMachine: Azure API VirtualMachine and VirtualMachine Billing object
+            Billing: Azure API Billing object
         """
         client: CostManagementClient = CostManagementClient(
             credential=self.auth.credential,
@@ -780,12 +784,41 @@ class VirtualMachines:
         )
 
         return self
-    
-    # TODO : Pass this function to get virtual machine billing (Based on debug, we need another function to get the billing range)
-    def months_function():
+
+    def db_save():
         ...
 
-    # TODO : Not sure what to do in this function
+
+class VirtualMachines:
+    def __init__(
+        self, 
+        auth: Auth, 
+        subscription: SubscriptionsModel,
+    ) -> None:
+        """Class Initializer
+
+        Args:
+            auth (Auth): Auth object
+            subscription (SubscriptionsModel): Subscription object
+        """
+        self.auth = auth
+        self.subscription: SubscriptionsModel = subscription
+
+    def get(self):
+        """Get All VM based on Subscription from Azure API
+
+        Returns:
+            VirtualMachine: Azure API VirtualMachine and VirtualMachine Billing object
+        """
+        client: ComputeManagementClient = ComputeManagementClient(
+            credential=self.auth.credential,
+            subscription_id=self.subscription.subscription_id,
+        )
+
+        self.res = [item.as_dict() for item in client.virtual_machines.list_all()]
+
+        return self
+
     def db_save(self):
         """Save Data to DB
 
@@ -795,12 +828,10 @@ class VirtualMachines:
         Returns:
             VirtualMachine: create or update existing data from DB
         """
-
-        def get_uuid(value):
-            try:
-                return str(uuid.UUID(value)) if value else None
-            except ValueError:
-                return None
-
-        if self.res is None or not self.res:
+        if not self.res or self.res is None or len(self.res) == 0:
             raise ValueError("No data to save")
+        for item in self.res:
+            VirtualMachineModel.objects.update_or_create(
+                subscription_id=item["subscription_id"], defaults=item
+            )
+        return self
