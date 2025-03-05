@@ -1,3 +1,4 @@
+
 {
     "name": "Nilakandi-Dev",
     "dockerComposeFile": "../../.docker/docker-compose.yml",
@@ -11,8 +12,12 @@
                 "terminal.integrated.shell.linux": "/bin/bash"
             },
             "extensions": [
-                "ms-python.python"
+                "ms-python.python",
+                "ms-python.isort",
+                "charliermarsh.ruff",
+                "ms-python.black-formatter"
             ]
         }
     }
+
 }

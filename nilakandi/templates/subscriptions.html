@@ -1,36 +1,43 @@
-{% extends 'base.html' %}
+
+{% extends "base.html" %}
 {% block title %}
-    Subscriptions
-{% endblock %}
+  Subscriptions
+{% endblock title %}
 {% block content %}
+  <div class="container">
     <h1>Subscriptions</h1>
     <hr />
     <table class="table table-striped">
-        <thead>
-            <tr>
-              <th scope="col">Subscription Id</th>
-              <th scope="col">Display Name</th>
-              <th scope="col">State</th>
-              <th scope="col">Authorization Source</th>
-              <th scope="col">Actions</th>
+      <thead>
+        <tr>
+          <th scope="col">Subscription Id</th>
+          <th scope="col">Display Name</th>
+          <th scope="col">State</th>
+          <th scope="col">Authorization Source</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in subs %}
+          <tr>
+            <td>{{ sub.subscription_id }}</td>
+            <td>{{ sub.display_name }}</td>
+            <td>{{ sub.state }}</td>
+            <td>{{ sub.authorization_source }}</td>
+            <td>
+              <div class="btn-group" role="group" aria-label="action">
+                <button type="button"
+                        class="btn btn-info"
+                        data-bs-toggle="modal"
+                        data-bs-target="#exampleModal">Details</button>
+                <button type="button" class="btn btn-primary">Get</button>
+              </div>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {% for sub in subs %}
-            <tr>
-                <td>{{ sub.subscription_id }} </td>
-                <td>{{ sub.display_name }} </td>
-                <td>{{ sub.state }} </td>
-                <td>{{ sub.authorization_source }} </td>
-                <td><div class="btn-group" role="group" aria-label="action">
-                  <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#exampleModal">Details</button>
-                  <button type="button" class="btn btn-primary">Get</button>
-                </div></td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% comment %} <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+        {% endfor %}
+      </tbody>
+    </table>
+    {% comment %} <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
         <div class="modal-dialog">
           <div class="modal-content">
             <div class="modal-header">
@@ -45,5 +52,7 @@
             </div>
           </div>
         </div>
-      </div> {% endcomment %}
-{% endblock %}
+    </div> {% endcomment %}
+  </div>
+{% endblock content %}
+

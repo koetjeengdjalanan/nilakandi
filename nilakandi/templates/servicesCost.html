@@ -1,25 +1,22 @@
-{% extends 'base.html' %}
+
+{% extends "base.html" %}
 {% block title %}
   Nilakandi - Services Cost
-{% endblock %}
+{% endblock title %}
 {% block content %}
   <h1>Services Cost</h1>
-
   <form method="get" class="form-inline">
     <label for="perPage">Items per page:</label>
     <select name="perPage" id="perPage" onchange="this.form.submit()">
-      <option value="10" {% if perPage == '10' %} selected {% endif%}>10</option>
-      <option value="25" {% if perPage == '25' %} selected {% endif%}>25</option>
-      <option value="50" {% if perPage == '50' %} selected {% endif%}>50</option>
+      <option value="10" {% if perPage == '10' %}selected{% endif %}>10</option>
+      <option value="25" {% if perPage == '25' %}selected{% endif %}>25</option>
+      <option value="50" {% if perPage == '50' %}selected{% endif %}>50</option>
     </select>
   </form>
-
   <table class="table table-striped">
     <thead>
       <tr>
-        {% for header in field_names %}
-          <th scope="col">{{ header|title }}</th>
-        {% endfor %}
+        {% for header in field_names %}<th scope="col">{{ header|title }}</th>{% endfor %}
       </tr>
     </thead>
     <tbody>
@@ -41,20 +38,18 @@
       {% endfor %}
     </tbody>
   </table>
-
   <div class="pagination">
     <span class="step-links">
       {% if page_obj.has_previous %}
-        <a href="?page=1&perPage={{ perPage }}">&laquo; first</a>
+        <a href="?page=1&perPage={{ perPage }}">first</a>
         <a href="?page={{ page_obj.previous_page_number }}&perPage={{ perPage }}">previous</a>
       {% endif %}
-
       <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.</span>
-
       {% if page_obj.has_next %}
         <a href="?page={{ page_obj.next_page_number }}&perPage={{ perPage }}">next</a>
-        <a href="?page={{ page_obj.paginator.num_pages }}&perPage={{ perPage }}">last &raquo;</a>
+        <a href="?page={{ page_obj.paginator.num_pages }}&perPage={{ perPage }}">last</a>
       {% endif %}
     </span>
   </div>
-{% endblock %}
+{% endblock content %}
+
