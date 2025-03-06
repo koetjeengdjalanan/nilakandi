@@ -26,7 +26,7 @@ LOGGING = {
         "file": {
             "level": "DEBUG",
             "class": "logging.handlers.TimedRotatingFileHandler",
-            "filename": Path(LOG_DIR, "django.log"),
+            "filename": Path(LOG_DIR, "nilakandi.log"),
             "when": "D",
             "interval": 1,
             "backupCount": 30,
