@@ -28,6 +28,7 @@ from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
 
 
+
 class Auth:
     """
     Azure API Authentication class
@@ -53,13 +54,17 @@ class Auth:
 
 
 class Services:
+
     """Azure API Services class to get data from Azure API"""
+
 
     def __init__(
         self,
         auth: Auth,
         subscription: SubscriptionsModel,
+
         end_date: dt = dt.now(ZoneInfo(TIME_ZONE)),
+
         start_date: dt | None = None,
     ) -> None:
         self.auth = auth
@@ -68,11 +73,13 @@ class Services:
         self.endDate = end_date
 
     def get(self) -> "Services":
+
         """Get from Azure API
 
         Returns:
             Services: Azure API Services object
         """
+
         client = CostManagementClient(credential=self.auth.credential)
         self.scope = self.subscription.id
         self.query = QueryDefinition(
@@ -94,6 +101,7 @@ class Services:
                     QueryGrouping(name="ServiceTier", type="Dimension"),
                     QueryGrouping(name="Meter", type="Dimension"),
                     QueryGrouping(name="PartNumber", type="Dimension"),
+
                     QueryGrouping(name="BillingMonth", type="Dimension"),
                     QueryGrouping(name="ResourceId", type="Dimension"),
                     QueryGrouping(name="ResourceType", type="Dimension"),
@@ -204,6 +212,7 @@ class Services:
             )
         else:
             ServicesModel.objects.bulk_create(data, batch_size=500)
+
         return self
 
     def __dict__(self) -> dict:
@@ -211,8 +220,10 @@ class Services:
 
 
 class Subscriptions:
+
     """Subscriptions class to get all subscriptions from Azure API
     use Azure API SubscriptionClient
+
     """
 
     def __init__(self, auth: Auth) -> None:
@@ -227,7 +238,9 @@ class Subscriptions:
         """Get Data from Azure API
 
         Returns:
+
             Subscriptions: Azure Api Subscriptions object
+
         """
         client = SubscriptionClient(credential=self.auth.credential)
         self.res = [item.as_dict() for item in client.subscriptions.list()]
@@ -252,6 +265,7 @@ class Subscriptions:
 
 
 class Marketplaces:
+
     """Azure API Marketplaces class to get data
     use Azure API ConsumptionManagementClient
     """
@@ -261,12 +275,14 @@ class Marketplaces:
         auth: Auth,
         subscription: SubscriptionsModel,
         date: dt = dt.now(ZoneInfo(TIME_ZONE)),
+
     ) -> None:
         self.auth: Auth = auth
         self.subscription: SubscriptionsModel = subscription
         self.yearMonth: str = date.strftime("%Y%m")
 
     def get(self) -> "Marketplaces":
+
         """Get from Azure API
 
         Returns:
@@ -278,9 +294,11 @@ class Marketplaces:
         )
         self.clientale: MarketplacesOperations = client.marketplaces
         self.res: Iterable[MarketplacesListResult] = self.clientale.list(
+
             scope=f"/subscriptions/{self.subscription.subscription_id}/providers/Microsoft.Billing/billingPeriods/{self.yearMonth}"
         )
         return self
+
 
     def db_save(
         self,
@@ -299,6 +317,7 @@ class Marketplaces:
             Marketplaces: Azure API Marketplaces object
         """
 
+
         def get_uuid(value):
             try:
                 return str(uuid.UUID(value)) if value else None
@@ -307,6 +326,7 @@ class Marketplaces:
 
         if self.res is None or not self.res:
             raise ValueError("No data to save")
+
         # This is not best practice but it works and I am lazy
         uniqueFields = [
             "usage_start",
@@ -315,6 +335,7 @@ class Marketplaces:
             "publisher_name",
             "plan_name",
         ]
+
         data: list[MarketplacesModel] = []
         for item in self.res:
             raw = item.as_dict() if hasattr(item, "as_dict") else vars(item)
@@ -350,6 +371,7 @@ class Marketplaces:
                     is_recurring_charge=raw.get("is_recurring_charge"),
                 )
             )
+
         if check_conflic_on_create:
             MarketplacesModel.objects.bulk_create(
                 data,
@@ -370,4 +392,5 @@ class Marketplaces:
                 ignore_conflicts=ignore_conflicts,
                 update_conflicts=update_conflicts,
             )
+
         return self

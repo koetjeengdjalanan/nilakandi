@@ -3,13 +3,17 @@ from django.conf import settings
 
 from nilakandi.models import Subscription as SubscriptionsModel
 from nilakandi.helper import azure_api
+
 from nilakandi.tasks import grab_services, grab_marketplaces
+
 
 from datetime import datetime as dt, timezone, timedelta
 
 
 class Command(BaseCommand):
+
     help = "Gather data from Azure API and save it to the database using celery as task queue."
+
 
     def add_arguments(self, parser):
         # parser.add_argument(
@@ -39,10 +43,13 @@ class Command(BaseCommand):
 
     @no_translations
     def handle(self, *args, **options):
+
+
         startDate = dt.fromisoformat(options["start_date"]).date()
         endDate = dt.fromisoformat(options["end_date"]).date()
         if endDate < startDate:
             raise ValueError("End date must be later than start date.")
+
         if endDate > dt.now().date():
             raise ValueError("End date must be earlier than today.")
 
@@ -59,3 +66,4 @@ class Command(BaseCommand):
                                     start_date=startDate, end_date=endDate)
         self.stdout.write(self.style.SUCCESS(
             "Data gathering has been successfully queued."))
+

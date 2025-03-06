@@ -1,3 +1,4 @@
+
 from datetime import datetime, timedelta
 from time import sleep
 from uuid import UUID
@@ -89,11 +90,14 @@ def grab_marketplaces(
         )
         tempDate = loopedDate + timedelta(days=deltaDays)
         marketplace = azi.Marketplaces(
+
             auth=auth,
             subscription=sub,
             start_date=loopedDate,
             end_date=tempDate,
         )
+
         marketplace.get().db_save()
         sleep(0.75)
         loopedDate += timedelta(days=deltaDays + 1)
+

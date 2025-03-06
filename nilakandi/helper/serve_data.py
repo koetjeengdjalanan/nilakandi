@@ -1,3 +1,4 @@
+
 import pandas as pd
 
 from nilakandi.models import Subscription as SubscriptionsModel
@@ -61,3 +62,4 @@ class SubsData:
             key=lambda x: pd.to_datetime(x, format="%B %Y"),
         ) + ["Grand Total"]
         return table[sorted_cols]
+
