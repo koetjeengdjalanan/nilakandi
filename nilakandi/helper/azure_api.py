@@ -6,6 +6,7 @@ from pandas import DataFrame, notna, to_datetime
 from re import sub
 from datetime import datetime as dt, timedelta
 from zoneinfo import ZoneInfo
+from datetime import datetime, time
 
 from azure.identity import ClientSecretCredential
 from azure.mgmt.consumption import ConsumptionManagementClient
@@ -383,9 +384,9 @@ class Marketplaces:
 
 class Billing:
     def __init__(
-        self, 
-        auth: Auth, 
-        subscription: SubscriptionsModel, 
+        self,
+        auth: Auth,
+        subscription: SubscriptionsModel,
         end_date: dt = dt.now(ZoneInfo(TIME_ZONE)),
         start_date: dt | None = None,
     ) -> None:
@@ -433,41 +434,45 @@ class Billing:
             from_property=self.startDate,  # Convert datetime to ISO format
             to=self.endDate,  # Convert datetime to ISO format
         )
-        
+
         dataset = QueryDataset(
             granularity="None",
-            aggregation={"totalCost": QueryAggregation(name="PreTaxCost", function="Sum")},
-            grouping=[QueryGrouping(type="Dimension", name=column) for column in required_columns],
+            aggregation={
+                "totalCost": QueryAggregation(name="PreTaxCost", function="Sum")
+            },
+            grouping=[
+                QueryGrouping(type="Dimension", name=column)
+                for column in required_columns
+            ],
         )
-        
+
         query_parameters = QueryDefinition(
             timeframe="Custom",
             time_period=time_period,
             dataset=dataset,
             type="Usage",
         )
-        
+
         query_result = client.query.usage(
-            scope=f"/subscriptions/{self.subscription.subscription_id}/", parameters=query_parameters
+            scope=f"/subscriptions/{self.subscription.subscription_id}/",
+            parameters=query_parameters,
         )
-        
+
         query_result_columns = [column.name for column in query_result.columns]
-        
+
         self.res: DataFrame = DataFrame(
-            data=query_result.rows,
-            columns=[name for name in query_result_columns]
+            data=query_result.rows, columns=[name for name in query_result_columns]
         )
 
         return self
 
-    def db_save():
-        ...
+    def db_save(): ...
 
 
 class VirtualMachines:
     def __init__(
-        self, 
-        auth: Auth, 
+        self,
+        auth: Auth,
         subscription: SubscriptionsModel,
     ) -> None:
         """Class Initializer
@@ -506,7 +511,53 @@ class VirtualMachines:
         if not self.res or self.res is None or len(self.res) == 0:
             raise ValueError("No data to save")
         for item in self.res:
+
+            time_created_str = item.get("time_created")
+            time_created_obj = None
+
+            subs_id = self.subscription.subscription_id
+
+            try:
+                dt_obj = datetime.strptime(time_created_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                time_created_obj = time(
+                    dt_obj.hour, dt_obj.minute, dt_obj.second, dt_obj.microsecond
+                )
+            except ValueError:
+                dt_obj = datetime.strptime(time_created_str, "%Y-%m-%dT%H:%M:%SZ")
+                time_created_obj = time(dt_obj.hour, dt_obj.minute, dt_obj.second)
+
+                continue
+
+            new_uuid = uuid.uuid4()
+            
             VirtualMachineModel.objects.update_or_create(
-                subscription_id=item["subscription_id"], defaults=item
+                id = new_uuid,
+                subscription_id=subs_id,
+                defaults={
+                    "vm_subs_id": subs_id,
+                    "name": item.get("name"),
+                    "type": item.get("type"),
+                    "location": item.get("location"),
+                    "tags": item.get(
+                        "tags", {}
+                    ),
+                    "resources": item.get("resources", {}),
+                    "identity": item.get("identity", {}),
+                    "zones": item.get("zones", []),
+                    "etag": item.get("etag"),
+                    "hardware_profile": item.get("hardware_profile", {}),
+                    "storage_profile": item.get("storage_profile", {}),
+                    "os_profile": item.get("os_profile", {}),
+                    "network_profile": item.get("network_profile", {}),
+                    "diagnostic_profile": item.get(
+                        "diagnostic_profile", {}
+                    ),
+                    "provisioning_state": item.get("provisioning_state"),
+                    "license_type": item.get("license_type"),
+                    "time_created": time_created_obj,
+                    "security_profile": item.get("security_profile", {}),
+                    "additional_capabilities": item.get("additional_capabilities", {}),
+                    "plan": item.get("plan", {}),
+                },
             )
         return self
