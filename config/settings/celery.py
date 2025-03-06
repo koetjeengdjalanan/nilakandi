@@ -56,4 +56,3 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 4
 
 # Result settings
 CELERY_RESULT_EXPIRES = 60 * 60 * 24  # Results expire after 1 day
-
