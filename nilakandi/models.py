@@ -1,20 +1,24 @@
 import uuid
-import datetime
+
 from django.db import models
 
 
 class Subscription(models.Model):
     subscription_id = models.UUIDField(primary_key=True)
     id = models.CharField(primary_key=False, max_length=100, unique=True)
+
     display_name = models.CharField()
     state = models.CharField()
     subscription_policies = models.JSONField(null=True, default=dict, blank=True)
     authorization_source = models.CharField()
     additional_properties = models.JSONField(null=True, default=dict, blank=True)
+
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
 
+
 class Services(models.Model):
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -33,15 +37,18 @@ class Services(models.Model):
     resource_type = models.CharField(null=True)
     cost_usd = models.FloatField()
     currency = models.CharField()
+
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
 
 
 class Operation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
     name = models.CharField()
     type = models.CharField()
     status = models.CharField()
+
     started = models.DateTimeField()
     completed = models.DateTimeField()
     duration = models.DurationField()
@@ -93,6 +100,7 @@ class Marketplace(models.Model):
     cost_center = models.CharField(null=True)
     publisher_name = models.CharField()
     plan_name = models.CharField()
+
     is_recurring_charge = models.BooleanField()
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)

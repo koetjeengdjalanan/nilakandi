@@ -1,38 +1,35 @@
-from typing import Iterable
 import uuid
-import requests
-
-from pandas import DataFrame, notna, to_datetime
+from datetime import datetime, time, timedelta
+from datetime import datetime as dt
 from re import sub
-from datetime import datetime as dt, timedelta
+from typing import Iterable
 from zoneinfo import ZoneInfo
-from datetime import datetime, time
 
+import requests
 from azure.identity import ClientSecretCredential
-from azure.mgmt.consumption import ConsumptionManagementClient
-from azure.mgmt.costmanagement import CostManagementClient
-from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.consumption.operations import MarketplacesOperations
+from azure.mgmt.consumption import ConsumptionManagementClient
 from azure.mgmt.consumption.models import MarketplacesListResult
+from azure.mgmt.consumption.operations import MarketplacesOperations
+from azure.mgmt.costmanagement import CostManagementClient
 from azure.mgmt.costmanagement.models import (
-    QueryDefinition,
-    QueryDataset,
     QueryAggregation,
+    QueryDataset,
+    QueryDefinition,
     QueryGrouping,
-    QueryTimePeriod,
     QueryResult,
+    QueryTimePeriod,
 )
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.subscription import SubscriptionClient
+from pandas import DataFrame, notna, to_datetime
 
 from config.django.base import TIME_ZONE
-from nilakandi.models import (
-    Subscription as SubscriptionsModel,
-    Services as ServicesModel,
-    Marketplace as MarketplacesModel,
-    VirtualMachine as VirtualMachineModel,
-    Billing as BillingModel,
-)
+from nilakandi.models import Billing as BillingModel
+from nilakandi.models import Marketplace as MarketplacesModel
+from nilakandi.models import Services as ServicesModel
+from nilakandi.models import Subscription as SubscriptionsModel
+from nilakandi.models import VirtualMachine as VirtualMachineModel
 
 
 class Auth:
@@ -80,6 +77,7 @@ class Services:
         Returns:
             Services: Azure API Services object
         """
+
         client = CostManagementClient(credential=self.auth.credential)
         self.scope = self.subscription.id
         self.query = QueryDefinition(
@@ -213,6 +211,7 @@ class Services:
             )
         else:
             ServicesModel.objects.bulk_create(data, batch_size=500)
+
         return self
 
     def __dict__(self) -> dict:
@@ -222,6 +221,7 @@ class Services:
 class Subscriptions:
     """Subscriptions class to get all subscriptions from Azure API
     use Azure API SubscriptionClient
+
     """
 
     def __init__(self, auth: Auth) -> None:
@@ -236,7 +236,9 @@ class Subscriptions:
         """Get Data from Azure API
 
         Returns:
+
             Subscriptions: Azure Api Subscriptions object
+
         """
         client = SubscriptionClient(credential=self.auth.credential)
         self.res = [item.as_dict() for item in client.subscriptions.list()]
@@ -316,6 +318,7 @@ class Marketplaces:
 
         if self.res is None or not self.res:
             raise ValueError("No data to save")
+
         # This is not best practice but it works and I am lazy
         uniqueFields = [
             "usage_start",
@@ -324,6 +327,7 @@ class Marketplaces:
             "publisher_name",
             "plan_name",
         ]
+
         data: list[MarketplacesModel] = []
         for item in self.res:
             raw = item.as_dict() if hasattr(item, "as_dict") else vars(item)
@@ -359,6 +363,7 @@ class Marketplaces:
                     is_recurring_charge=raw.get("is_recurring_charge"),
                 )
             )
+
         if check_conflic_on_create:
             MarketplacesModel.objects.bulk_create(
                 data,
@@ -529,18 +534,16 @@ class VirtualMachines:
                 continue
 
             new_uuid = uuid.uuid4()
-            
+
             VirtualMachineModel.objects.update_or_create(
-                id = new_uuid,
+                id=new_uuid,
                 subscription_id=subs_id,
                 defaults={
                     "vm_subs_id": subs_id,
                     "name": item.get("name"),
                     "type": item.get("type"),
                     "location": item.get("location"),
-                    "tags": item.get(
-                        "tags", {}
-                    ),
+                    "tags": item.get("tags", {}),
                     "resources": item.get("resources", {}),
                     "identity": item.get("identity", {}),
                     "zones": item.get("zones", []),
@@ -549,9 +552,7 @@ class VirtualMachines:
                     "storage_profile": item.get("storage_profile", {}),
                     "os_profile": item.get("os_profile", {}),
                     "network_profile": item.get("network_profile", {}),
-                    "diagnostic_profile": item.get(
-                        "diagnostic_profile", {}
-                    ),
+                    "diagnostic_profile": item.get("diagnostic_profile", {}),
                     "provisioning_state": item.get("provisioning_state"),
                     "license_type": item.get("license_type"),
                     "time_created": time_created_obj,

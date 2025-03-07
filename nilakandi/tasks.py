@@ -94,6 +94,7 @@ def grab_marketplaces(
             start_date=loopedDate,
             end_date=tempDate,
         )
+
         marketplace.get().db_save()
         sleep(0.75)
         loopedDate += timedelta(days=deltaDays + 1)

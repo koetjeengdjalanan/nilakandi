@@ -57,12 +57,14 @@ class Command(BaseCommand):
         )
         # logger = logging.getLogger(__name__)
         # logger.info(f"{start_date=}, {end_date=}, Deltas = {end_date - start_date}")
+
         auth = azure_api.Auth(
             client_id=settings.AZURE_CLIENT_ID,
             client_secret=settings.AZURE_CLIENT_SECRET,
             tenant_id=settings.AZURE_TENANT_ID,
         )
         azure_api.Subscriptions(auth=auth).get().db_save()
+
         sys.stdout.write(
             f"{Subscription.objects.count()=} {", ".join(list(Subscription.objects.values_list('display_name', flat=True)))}\n"
         )
