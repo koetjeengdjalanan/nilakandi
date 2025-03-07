@@ -108,6 +108,10 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Poetry
+poetry.lock
+poetry.toml
+
 # Environments
 .env
 .venv
