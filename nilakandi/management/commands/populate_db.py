@@ -1,4 +1,3 @@
-
 import sys
 from datetime import datetime as dt
 from time import sleep
@@ -13,10 +12,8 @@ from nilakandi.models import Subscription
 from nilakandi.tasks import grab_services
 
 
-
 class Command(BaseCommand):
     help = "Populate the database with data from Azure API"
-
 
     def add_arguments(self, parser):
         # parser.add_argument(
@@ -79,4 +76,3 @@ class Command(BaseCommand):
                 end_date=end_date,
             )
             sleep(options["delay"])
-
