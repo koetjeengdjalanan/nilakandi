@@ -1,4 +1,3 @@
-
 {
     "name": "Nilakandi-Dev",
     "dockerComposeFile": "../../.docker/docker-compose.yml",
@@ -15,9 +14,9 @@
                 "ms-python.python",
                 "ms-python.isort",
                 "charliermarsh.ruff",
-                "ms-python.black-formatter"
+                "ms-python.black-formatter",
+                "monosans.djlint"
             ]
         }
     }
-
 }

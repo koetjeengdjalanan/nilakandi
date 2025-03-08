@@ -1,23 +1,67 @@
+name: Nilakandi
+
 services:
+  migrate:
+    hostname: Nilakandi-migrate
+    container_name: Nilakandi-migrate
+    build:
+      context: ..
+      dockerfile: .docker/web/Dockerfile
+    restart: "no"
+    user: arjuna
+    entrypoint: sh -c "poetry run python manage.py makemigrations nilakandi && poetry run python manage.py migrate"
+    volumes:
+      - ../.env:/app/.env:ro
+    networks:
+      - nilakandi-net
+    depends_on:
+      - db
+
   web:
     hostname: Nilakandi-web
     container_name: Nilakandi-web
-    image: mcr.microsoft.com/devcontainers/python:1-3.12-bullseye
-    user: vscode
+    build:
+      context: ..
+      dockerfile: .docker/web/Dockerfile
+    restart: always
+    user: arjuna
+    command: poetry run python manage.py runserver 0.0.0.0:21180
     stdin_open: true
     tty: true
-    volumes:
-      - ..:/workspace:cached
     ports:
-      - "80:8000/tcp"
-      - "21180:21180/tcp"
+      - "21180:21180"
+    volumes:
+      - ../.env:/app/.env:ro
     networks:
       - nilakandi-net
+    depends_on:
+      - migrate
+      - db
+      - redis
+
+  workers:
+    hostname: Nilakandi-worker
+    container_name: Nilakandi-worker
+    build:
+      context: ..
+      dockerfile: .docker/web/Dockerfile
+    restart: on-failure:5
+    user: arjuna
+    command: poetry run celery -A config.settings worker --loglevel=info
+    tty: true
+    volumes:
+      - ../.env:/app/.env:ro
+    networks:
+      - nilakandi-net
+    depends_on:
+      - web
+      - migrate
 
   db:
     hostname: Nilakandi-db
     container_name: Nilakandi-db
     image: postgres:13
+    restart: always
     volumes:
       - nilakandi-db-data:/var/lib/postgresql/data
     environment:
@@ -33,6 +77,7 @@ services:
     hostname: Nilakandi-redis
     container_name: Nilakandi-redis
     image: redis:6
+    restart: always
     ports:
       - 21179:6379
     networks:
