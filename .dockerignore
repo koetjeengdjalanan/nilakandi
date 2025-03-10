@@ -98,6 +98,10 @@ target/
 # install all needed dependencies.
 Pipfile.lock
 
+# Poetry
+poetry.lock
+poetry.toml
+
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow
 __pypackages__/
 

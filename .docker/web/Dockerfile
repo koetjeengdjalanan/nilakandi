@@ -10,22 +10,34 @@ SHELL ["/bin/bash", "-c"]
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DOCUMENT_ROOT=/app
-ENV UID=1001
+ENV POETRY_VERSION=2.1.1
+ENV POETRY_NO_INTERACTION=1
+ENV DEPLOYMENT=dev
+ENV LOG_DIRECTORY=/var/log/nilakandi
+
+# ARGUMENTS
+ARG USER=arjuna
+ARG UID=1001
+
+# Pre-Req Install
+RUN apt-get update && apt-get install -y curl libpq-dev gcc
 
 # Container User's Cred Setup
-RUN useradd -G root -u $UID -d /home/arjuna arjuna
-RUN mkdir -p /home/arjuna/.local/bin
-RUN chown -R arjuna:arjuna /home/arjuna
-ENV PATH="/home/arjuna/.local/bin:$PATH"
+RUN useradd -G root -u $UID -d /home/$USER $USER
+RUN mkdir -p /home/$USER/.local/bin $DOCUMENT_ROOT $LOG_DIRECTORY
+RUN chown -R $USER:$USER /home/$USER $DOCUMENT_ROOT $LOG_DIRECTORY
+
+# Change User & WorkDir
+WORKDIR $DOCUMENT_ROOT
+USER $USER
 
 # Copy Repo
-COPY . $DOCUMENT_ROOT/
-RUN ls -lah $DOCUMENT_ROOT
-RUN chown -R arjuna:arjuna $DOCUMENT_ROOT
+COPY --chown=$USER:$USER . .
+# RUN chown -R $USER:$USER $DOCUMENT_ROOT
+
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/home/$USER/.local/bin:$PATH"
 
 # Finalization
-USER arjuna
-RUN pip install --upgrade pip
-RUN pip install -r $DOCUMENT_ROOT/requirements.txt
-WORKDIR $DOCUMENT_ROOT
-EXPOSE 21280
+RUN poetry install $(test "$DEPLOYMENT" == production && echo "--only=main") --no-interaction --no-ansi

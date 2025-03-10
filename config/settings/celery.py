@@ -1,15 +1,23 @@
 from __future__ import absolute_import, unicode_literals
 
 from celery import Celery
-from config.env import env, BASE_DIR
+from config.env import env
+
+
 import os
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.django.local')
+from celery import Celery
+
+from config.env import BASE_DIR, env
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.django.local")
 env.read_env(os.path.join(BASE_DIR, ".env"))
+
 
 app = Celery("config")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND")
