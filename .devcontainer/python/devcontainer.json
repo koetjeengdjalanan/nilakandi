@@ -1,21 +1,52 @@
 {
     "name": "Nilakandi-Dev",
-    "dockerComposeFile": "../../.docker/docker-compose.yml",
-    "postCreateCommand": "pip install -r requirements.txt",
+    "dockerComposeFile": "../docker-compose.yml",
+    "postStartCommand": "poetry install",
+    "onCreateCommand": "sudo chown -R vscode:vscode /workspace",
     "service": "web",
     "shutdownAction": "stopCompose",
     "workspaceFolder": "/workspace",
+    "remoteUser": "vscode",
+    "features": {
+        "ghcr.io/devcontainers-extra/features/poetry:2": {},
+        "ghcr.io/joshuanianji/devcontainer-features/github-cli-persistence:1": {}
+    },
     "customizations": {
         "vscode": {
             "settings": {
-                "terminal.integrated.shell.linux": "/bin/bash"
+                "files.eol": "\n",
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "/bin/bash"
+                    }
+                },
+                "files.watcherExclude": {
+                    "**/.git/objects/**": true,
+                    "**/.git/subtree-cache/**": true,
+                    "**/.hg/store/**": true,
+                    "**/.venv/**": true
+                },
+                "[html][django-html][handlebars][hbs][mustache][jinja][jinja-html][nj][njk][nunjucks][twig]": {
+                    "editor.defaultFormatter": "monosans.djlint"
+                },
+                "[python]": {
+                    "editor.defaultFormatter": "ms-python.black-formatter",
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.fixAll": "explicit",
+                        "source.organizeImports": "explicit"
+                    }
+                }
             },
             "extensions": [
                 "ms-python.python",
                 "ms-python.isort",
-                "charliermarsh.ruff",
                 "ms-python.black-formatter",
-                "monosans.djlint"
+                "monosans.djlint",
+                "charliermarsh.ruff",
+                "batisteo.vscode-django",
+                "njpwerner.autodocstring"
             ]
         }
     }

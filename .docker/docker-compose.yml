@@ -78,8 +78,6 @@ services:
     container_name: Nilakandi-redis
     image: redis:6
     restart: always
-    ports:
-      - 21179:6379
     networks:
       - nilakandi-net
 
