@@ -1,0 +1,49 @@
+name: Dev-Nilakandi
+
+services:
+  web:
+    hostname: Dev-Nilakandi-web
+    container_name: Dev-Nilakandi-web
+    image: mcr.microsoft.com/devcontainers/python:1-3.12-bullseye
+    volumes:
+      - ../:/workspace:cached
+    command: sleep infinity
+    ports:
+      - 21180:21180
+    networks:
+      - Dev-nilakandi-net
+    depends_on:
+      - db
+      - redis
+
+  db:
+    hostname: Dev-Nilakandi-db
+    container_name: Dev-Nilakandi-db
+    image: postgres:13
+    volumes:
+      - Dev-nilakandi-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: arjuna
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: Dev-nilakandi
+    ports:
+      - 21132:5432
+    networks:
+      - Dev-nilakandi-net
+
+  redis:
+    hostname: Dev-Nilakandi-redis
+    container_name: Dev-Nilakandi-redis
+    image: redis:6
+    ports:
+      - 21179:6379
+    networks:
+      - Dev-nilakandi-net
+
+networks:
+  Dev-nilakandi-net:
+    driver: bridge
+
+volumes:
+  Dev-nilakandi-db-data:
+    driver: local
