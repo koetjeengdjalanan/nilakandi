@@ -62,4 +62,3 @@ class SubsData:
             key=lambda x: pd.to_datetime(x, format="%B %Y"),
         ) + ["Grand Total"]
         return table[sorted_cols]
-

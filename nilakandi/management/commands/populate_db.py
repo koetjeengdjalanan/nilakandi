@@ -79,4 +79,3 @@ class Command(BaseCommand):
                 end_date=end_date,
             )
             sleep(options["delay"])
-

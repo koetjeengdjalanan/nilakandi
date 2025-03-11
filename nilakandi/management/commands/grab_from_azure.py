@@ -66,4 +66,3 @@ class Command(BaseCommand):
                                     start_date=startDate, end_date=endDate)
         self.stdout.write(self.style.SUCCESS(
             "Data gathering has been successfully queued."))
-
