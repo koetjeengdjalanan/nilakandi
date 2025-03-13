@@ -1,18 +1,16 @@
 import uuid
-
+import datetime
 from django.db import models
 
 
 class Subscription(models.Model):
     subscription_id = models.UUIDField(primary_key=True)
     id = models.CharField(primary_key=False, max_length=100, unique=True)
-
     display_name = models.CharField()
     state = models.CharField()
     subscription_policies = models.JSONField(null=True, default=dict, blank=True)
     authorization_source = models.CharField()
     additional_properties = models.JSONField(null=True, default=dict, blank=True)
-
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
 
@@ -70,21 +68,11 @@ class Marketplace(models.Model):
     )
     name = models.CharField(db_comment="Originally called id")
     type = models.CharField()
-        default=uuid.uuid4,
-        editable=True,
-        null=True,
-        db_comment="Originally called name",
-    )
-    name = models.CharField(db_comment="Originally called id")
-    type = models.CharField()
     tags = models.JSONField(null=True, default=dict, blank=True)
-    billing_period_id = models.CharField()
     billing_period_id = models.CharField()
     usage_start = models.DateTimeField()
     usage_end = models.DateTimeField()
     resource_rate = models.FloatField()
-    offer_name = models.CharField()
-    resource_group = models.CharField()
     offer_name = models.CharField()
     resource_group = models.CharField()
     additional_info = models.JSONField(null=True, default=dict, blank=True)
@@ -94,13 +82,7 @@ class Marketplace(models.Model):
     instance_name = models.CharField(null=True)
     instance_id = models.CharField(null=True)
     currency = models.CharField(default="USD")
-        default=uuid.uuid4, editable=True, null=True, blank=True
-    )
-    instance_name = models.CharField(null=True)
-    instance_id = models.CharField(null=True)
-    currency = models.CharField(default="USD")
     consumed_quantity = models.FloatField()
-    unit_of_measure = models.CharField()
     unit_of_measure = models.CharField()
     pretax_cost = models.FloatField()
     is_estimated = models.BooleanField()
