@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+from config.settings.logging import LOGGING
 import os
 from config.env import env, BASE_DIR
 
@@ -39,7 +40,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "bootstrap5",
+    "django_bootstrap5",
     "nilakandi",
 ]
 
@@ -121,6 +122,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE: str = env("TIME_ZONE", default="UTC")
+
 
 USE_I18N = True
 

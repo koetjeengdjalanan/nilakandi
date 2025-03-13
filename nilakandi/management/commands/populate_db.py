@@ -1,3 +1,4 @@
+
 import sys
 from datetime import datetime as dt
 from time import sleep
@@ -12,8 +13,10 @@ from nilakandi.models import Subscription
 from nilakandi.tasks import grab_services
 
 
+
 class Command(BaseCommand):
     help = "Populate the database with data from Azure API"
+
 
     def add_arguments(self, parser):
         # parser.add_argument(
@@ -57,12 +60,14 @@ class Command(BaseCommand):
         )
         # logger = logging.getLogger(__name__)
         # logger.info(f"{start_date=}, {end_date=}, Deltas = {end_date - start_date}")
+
         auth = azure_api.Auth(
             client_id=settings.AZURE_CLIENT_ID,
             client_secret=settings.AZURE_CLIENT_SECRET,
             tenant_id=settings.AZURE_TENANT_ID,
         )
         azure_api.Subscriptions(auth=auth).get().db_save()
+
         sys.stdout.write(
             f"{Subscription.objects.count()=} {", ".join(list(Subscription.objects.values_list('display_name', flat=True)))}\n"
         )
