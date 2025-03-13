@@ -1,5 +1,5 @@
 import uuid
-import datetime
+
 from django.db import models
 
 
@@ -13,6 +13,7 @@ class Subscription(models.Model):
     additional_properties = models.JSONField(null=True, default=dict, blank=True)
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
+
 
 class Services(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -131,7 +132,7 @@ class VirtualMachine(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
 
-class Billing(models.Model):
+class VirtualMachineCost(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -157,3 +158,15 @@ class Billing(models.Model):
     pretax_cost = models.FloatField()
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
+
+    """
+        Constraint unique keys based on 
+    """
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["billing_month", "resource_id", "meter_id"],
+                name="unique_billing_resource_meter",
+            )
+        ]

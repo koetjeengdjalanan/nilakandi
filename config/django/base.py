@@ -10,9 +10,9 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-from config.settings.logging import LOGGING
 import os
-from config.env import env, BASE_DIR
+
+from config.env import BASE_DIR, env
 
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
