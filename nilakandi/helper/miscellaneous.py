@@ -1,3 +1,4 @@
+import calendar
 from datetime import datetime as dt
 from datetime import timedelta
 from zoneinfo import ZoneInfo
@@ -76,3 +77,25 @@ def yearly_list(start_date: dt, end_date: dt) -> list[tuple[dt, dt]]:
             )
         ]
     return dates
+
+
+def getlastmonth():
+    """currently used by sml procedure"""
+    right_now = dt.now()
+
+    # first_day_current_month = dt(right_now.year, right_now.month, 1)
+
+    if right_now.month == 1:
+        previous_month = 12
+        year = right_now.year - 1
+    else:
+        previous_month = right_now.month - 1
+        year = right_now.year
+
+    first_day_previous_month = dt(year, previous_month, 1)
+
+    last_day_previous_month = dt(
+        year, previous_month, calendar.monthrange(year, previous_month)[1]
+    )
+
+    return first_day_previous_month, last_day_previous_month

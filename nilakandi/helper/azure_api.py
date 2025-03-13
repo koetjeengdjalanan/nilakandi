@@ -1,35 +1,36 @@
-from typing import Iterable
 import uuid
-import requests
-from pandas import DataFrame
+from datetime import datetime as dt
+from datetime import time, timedelta
 from re import sub
-from datetime import datetime as dt, timedelta, time
+from typing import Iterable
 from zoneinfo import ZoneInfo
 
+import requests
 from azure.identity import ClientSecretCredential
-from azure.mgmt.consumption import ConsumptionManagementClient
-from azure.mgmt.costmanagement import CostManagementClient
-from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.consumption.operations import MarketplacesOperations
+from azure.mgmt.consumption import ConsumptionManagementClient
 from azure.mgmt.consumption.models import MarketplacesListResult
+from azure.mgmt.consumption.operations import MarketplacesOperations
+from azure.mgmt.costmanagement import CostManagementClient
 from azure.mgmt.costmanagement.models import (
-    QueryDefinition,
-    QueryDataset,
     QueryAggregation,
+    QueryDataset,
+    QueryDefinition,
     QueryGrouping,
-    QueryTimePeriod,
     QueryResult,
+    QueryTimePeriod,
 )
+from azure.mgmt.subscription import SubscriptionClient
+from pandas import DataFrame
 
 from config.django.base import TIME_ZONE
-from nilakandi.models import (
-    Subscription as SubscriptionsModel,
-    Services as ServicesModel,
-    Marketplace as MarketplacesModel,
-    VirtualMachine as VirtualMachineModel,
-    Billing as BillingModel,
-)
+from nilakandi.models import Marketplace as MarketplacesModel
+from nilakandi.models import Services as ServicesModel
+from nilakandi.models import Subscription as SubscriptionsModel
+from nilakandi.models import VirtualMachine as VirtualMachineModel
+from nilakandi.models import VirtualMachineCost as VirtualMachineCostModel
+
+from .miscellaneous import getlastmonth
 
 
 class Auth:
@@ -379,13 +380,11 @@ class Marketplaces:
         return self
 
 
-class Billing:
+class VirtualMachineCost:
     def __init__(
         self,
         auth: Auth,
         subscription: SubscriptionsModel,
-        end_date: dt = dt.now(ZoneInfo(TIME_ZONE)),
-        start_date: dt | None = None,
     ) -> None:
         """Class Initializer
 
@@ -395,11 +394,9 @@ class Billing:
         """
         self.auth = auth
         self.subscription: SubscriptionsModel = subscription
-        self.startDate = start_date if start_date else end_date - timedelta(days=7)
-        self.endDate = end_date
 
     def get(self):
-        """Get Virtual Machine Billing Data from Azure API
+        """Get Virtual Machine Cost Data by Subscriptions from Azure API
 
         Returns:
             Billing: Azure API Billing object
@@ -427,9 +424,11 @@ class Billing:
             "SubscriptionName",
         ]
 
+        start_date, end_date = getlastmonth()
+
         time_period = QueryTimePeriod(
-            from_property=self.startDate,  # Convert datetime to ISO format
-            to=self.endDate,  # Convert datetime to ISO format
+            from_property=start_date,  # Convert datetime to ISO format
+            to=end_date,  # Convert datetime to ISO format
         )
 
         dataset = QueryDataset(
@@ -463,7 +462,63 @@ class Billing:
 
         return self
 
-    def db_save(): ...
+    def db_save(
+        self,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = True,
+        check_conflic_on_create: bool = True,
+    ) -> "VirtualMachineCost":
+        """Save data to DB"""
+        if self.res is None or self.res.empty:
+            print("No data to save")
+            return self
+
+        data = []
+
+        for _, row in self.res.iterrows():
+            billing_month_str = row["BillingMonth"]
+            billing_month_datetime = dt.fromisoformat(
+                billing_month_str.replace("Z", "+00:00")
+            )
+
+            formatted_billing_month = billing_month_datetime.strftime("%Y-%m-%d")
+            data.append(
+                VirtualMachineCostModel(
+                    billing_month=formatted_billing_month,
+                    resource_id=row["ResourceId"],
+                    resource_type=row["ResourceType"],
+                    resource_group=row["ResourceGroup"],
+                    service_name=row["ServiceName"],
+                    resource_group_name=row["ResourceGroupName"],
+                    resource_location=row["ResourceLocation"],
+                    consumed_service=row["ConsumedService"],
+                    meter_id=row["MeterId"],
+                    meter_category=row["MeterCategory"],
+                    meter_sub_category=row["MeterSubcategory"],
+                    meter=row["Meter"],
+                    department_name=row["DepartmentName"],
+                    subscription_id=row["SubscriptionId"],
+                    subscription_name=row["SubscriptionName"],
+                    pretax_cost=row["PreTaxCost"],
+                )
+            )
+
+        if check_conflic_on_create:
+            VirtualMachineCostModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
+                unique_fields=["billing_month", "resource_id", "meter_id"],
+                update_fields=["pretax_cost"],
+            )
+        else:
+            VirtualMachineCostModel.objects.bulk_create(data, batch_size=500)
+
+        return self
+
+    def __dict__(self) -> dict:
+        return self.res.to_dict(orient="records") if self.res is not None else {}
 
 
 class VirtualMachines:
@@ -508,7 +563,6 @@ class VirtualMachines:
         if not self.res or self.res is None or len(self.res) == 0:
             raise ValueError("No data to save")
         for item in self.res:
-
             time_created_str = item.get("time_created")
             time_created_obj = None
 
@@ -526,18 +580,16 @@ class VirtualMachines:
                 continue
 
             new_uuid = uuid.uuid4()
-            
+
             VirtualMachineModel.objects.update_or_create(
-                id = new_uuid,
+                id=new_uuid,
                 subscription_id=subs_id,
                 defaults={
                     "vm_subs_id": subs_id,
                     "name": item.get("name"),
                     "type": item.get("type"),
                     "location": item.get("location"),
-                    "tags": item.get(
-                        "tags", {}
-                    ),
+                    "tags": item.get("tags", {}),
                     "resources": item.get("resources", {}),
                     "identity": item.get("identity", {}),
                     "zones": item.get("zones", []),
@@ -546,9 +598,7 @@ class VirtualMachines:
                     "storage_profile": item.get("storage_profile", {}),
                     "os_profile": item.get("os_profile", {}),
                     "network_profile": item.get("network_profile", {}),
-                    "diagnostic_profile": item.get(
-                        "diagnostic_profile", {}
-                    ),
+                    "diagnostic_profile": item.get("diagnostic_profile", {}),
                     "provisioning_state": item.get("provisioning_state"),
                     "license_type": item.get("license_type"),
                     "time_created": time_created_obj,
