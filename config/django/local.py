@@ -1,3 +1,3 @@
-from .base import *
+from .base import *  # noqa: F403
 
-INSTALLED_APPS.append("django_extensions")
+INSTALLED_APPS.append("django_extensions")  # noqa: F405

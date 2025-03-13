@@ -1,16 +1,14 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block title %}
   Subscription Report
-{% endblock %}
+{% endblock title %}
 {% block content %}
   <h1>Subscription Report</h1>
-  <hr/>
+  <hr />
   <h2>{{ subsName }} Pivot Table</h2>
   {% for key, pivot in pivotTable.items %}
     <h3 class="text-center">{{ key }}</h3>
-    <div class="pivot-table-container">
-      {{ pivot | safe }}
-    </div>
+    <div class="pivot-table-container">{{ pivot | safe }}</div>
   {% endfor %}
   <style>
     th {
@@ -34,4 +32,5 @@
         width: 100%;
       }
     }
-{% endblock %}
+  </style>
+{% endblock content %}
