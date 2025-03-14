@@ -1,9 +1,8 @@
-
-from datetime import datetime, timedelta
-from time import sleep
+from datetime import datetime
 from uuid import UUID
 
 from celery import shared_task
+from dateutil.relativedelta import relativedelta
 
 from nilakandi.azure.api.services import Services
 from nilakandi.helper import azure_api as azi
@@ -81,23 +80,18 @@ def grab_marketplaces(
         client_secret=creds["client_secret"],
     )
     sub = SubscriptionsModel.objects.get(subscription_id=subscription_id)
-    # earliest: datetime.date = sub.marketplace_set.earliest('usage_start').usage_start
-    # latest: datetime.date = sub.marketplace_set.latest('usage_end').usage_end
-    loopedDate = start_date
-    while loopedDate <= end_date:
-        deltaDays: int = (
-            3 if (end_date - start_date).days >= 3 else (end_date - start_date).days
+    month_list = [
+        (start_date + relativedelta(months=i)).strftime("%Y%m")
+        for i in range(
+            (end_date.year - start_date.year) * 12
+            + end_date.month
+            - start_date.month
+            + 1
         )
-        tempDate = loopedDate + timedelta(days=deltaDays)
-        marketplace = azi.Marketplaces(
-
+    ]
+    for month in month_list:
+        azi.Marketplaces(
             auth=auth,
             subscription=sub,
-            start_date=loopedDate,
-            end_date=tempDate,
-        )
-
-        marketplace.get().db_save()
-        sleep(0.75)
-        loopedDate += timedelta(days=deltaDays + 1)
-
+            date=month,
+        ).get().db_save()

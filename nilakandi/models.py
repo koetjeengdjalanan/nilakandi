@@ -17,6 +17,9 @@ class Subscription(models.Model):
     def __str__(self):
         return self.display_name
 
+    class Meta:
+        unique_together = ["subscription_id", "id", "display_name"]
+
 
 class Services(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -42,6 +45,16 @@ class Services(models.Model):
 
     def __str__(self):
         return self.id
+
+    class Meta:
+        unique_together = [
+            "subscription",
+            "usage_date",
+            "service_name",
+            "resource_id",
+            "service_tier",
+            "meter",
+        ]
 
 
 class Operation(models.Model):
@@ -109,3 +122,13 @@ class Marketplace(models.Model):
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        unique_together = [
+            "subscription",
+            "source_id",
+            "name",
+            "usage_start",
+            "billing_period_id",
+            "instance_id",
+        ]

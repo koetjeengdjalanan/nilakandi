@@ -24,18 +24,3 @@ class ApiResult(BaseModel):
     next_link: Optional[str] = None
     raw: Optional[Union[List[Dict[str, Any]], Dict[str, Any]]] = None
     data: PandasDataFrame = pd.DataFrame()
-
-    # def __init_subclass__(cls, **kwargs):
-    #     cls._transform_data()
-    #     return super().__init_subclass__(**kwargs)
-
-    # def _transform_data(self) -> None:
-    #     self.data = pd.DataFrame(
-    #         data=self.raw["rows"],
-    #         columns=[
-    #             sub(
-    #                 r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", col["name"]
-    #             ).lower()
-    #             for col in self.raw["columns"]
-    #         ],
-    #     )

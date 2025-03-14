@@ -1,4 +1,3 @@
-
 import sys
 from datetime import datetime as dt
 from time import sleep
@@ -10,25 +9,20 @@ from django.core.management.base import BaseCommand
 
 from nilakandi.helper import azure_api
 from nilakandi.models import Subscription
-from nilakandi.tasks import grab_services
-
+from nilakandi.tasks import grab_marketplaces, grab_services
 
 
 class Command(BaseCommand):
     help = "Populate the database with data from Azure API"
 
-
     def add_arguments(self, parser):
-        # parser.add_argument(
-        #     "--all",
-        #     action="store_true",
-        #     help="Gather data from all subscriptions",
-        # )
-        # parser.add_argument(
-        #     "--subscription",
-        #     type=str,
-        #     help="Gather data from a specific subscription",
-        # )
+        parser.add_argument(
+            "--subscription",
+            type=str,
+            nargs="*",
+            default=None,
+            help="Gather data from a specific list of subscription",
+        )
         parser.add_argument(
             "--start-date",
             "-s",
@@ -52,14 +46,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        print(options)
         start_date = dt.fromisoformat(options["start_date"]).replace(
             tzinfo=ZoneInfo(settings.TIME_ZONE)
         )
         end_date = dt.fromisoformat(options["end_date"]).replace(
             tzinfo=ZoneInfo(settings.TIME_ZONE)
         )
-        # logger = logging.getLogger(__name__)
-        # logger.info(f"{start_date=}, {end_date=}, Deltas = {end_date - start_date}")
 
         auth = azure_api.Auth(
             client_id=settings.AZURE_CLIENT_ID,
@@ -67,16 +60,38 @@ class Command(BaseCommand):
             tenant_id=settings.AZURE_TENANT_ID,
         )
         azure_api.Subscriptions(auth=auth).get().db_save()
+        subs_id_list: list[str] = [
+            str(id)
+            for id in Subscription.objects.values_list("subscription_id", flat=True)
+        ]
+        if options["subscription"] in subs_id_list:
+            subs_id_list = options["subscription"]
+            sys.stdout.write(f"Processing for: {', '.join(subs_id_list)}\n")
+        elif options["subscription"] is not None:
+            sys.stderr.write(
+                f"Subscription ID not found in database. Please use one of the following: {', '.join(subs_id_list)}\n"
+            )
+            sys.exit(2)
 
         sys.stdout.write(
             f"{Subscription.objects.count()=} {", ".join(list(Subscription.objects.values_list('display_name', flat=True)))}\n"
         )
-        for sub in Subscription.objects.all():
+        for id in subs_id_list:
             grab_services.delay(
                 bearer=auth.token.token,
-                subscription_id=sub.subscription_id,
+                subscription_id=id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            grab_marketplaces.delay(
+                creds={
+                    "client_id": settings.AZURE_CLIENT_ID,
+                    "client_secret": settings.AZURE_CLIENT_SECRET,
+                    "tenant_id": settings.AZURE_TENANT_ID,
+                },
+                subscription_id=id,
                 start_date=start_date,
                 end_date=end_date,
             )
             sleep(options["delay"])
-
+        sys.stdout.write("Task has been queued\n")

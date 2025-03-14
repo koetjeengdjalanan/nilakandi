@@ -5,14 +5,13 @@ from uuid import UUID
 from zoneinfo import ZoneInfo as zi
 
 import pandas as pd
-from requests import exceptions, post
-from tenacity import retry, retry_if_exception, stop_after_attempt
-
 from config.django.base import TIME_ZONE
 from nilakandi.azure.models import ApiResult
 from nilakandi.helper.miscellaneous import wait_retry_after
 from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
+from requests import exceptions, post
+from tenacity import retry, retry_if_exception, stop_after_attempt
 
 
 class Services:
@@ -170,5 +169,18 @@ class Services:
             )
             for index, row in self.res.data.iterrows()
         ]
-        ServicesModel.objects.bulk_create(data, batch_size=500)
+        ServicesModel.objects.bulk_create(
+            data,
+            batch_size=500,
+            ignore_conflicts=True,
+            # update_conflicts=False,
+            # unique_fields=list(ServicesModel._meta.unique_together[0]),
+            # update_fields=[
+            #     col.name
+            #     for col in ServicesModel._meta.get_fields()
+            #     if hasattr(col, "name")
+            #     and col.name not in ServicesModel._meta.unique_together[0]
+            #     and col is not ServicesModel._meta.pk
+            # ],
+        )
         return self
