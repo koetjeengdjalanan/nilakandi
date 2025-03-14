@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import requests
 from azure.core.credentials import AccessToken
 from azure.identity import ClientSecretCredential, TokenCachePersistenceOptions
+from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.consumption import ConsumptionManagementClient
 from azure.mgmt.consumption.models import MarketplacesListResult
 from azure.mgmt.consumption.operations import MarketplacesOperations

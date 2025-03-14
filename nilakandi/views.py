@@ -47,7 +47,9 @@ def subscription_details(request, subsId):
         if data.empty:
             return "<pre>No Data</pre>"
         return data.to_html(
-            classes="table table-striped", float_format="{:,.8f}".format, na_rep="n/a"
+            classes="table table-striped",
+            float_format=lambda x: f"{x:,.16f}".rstrip("0").rstrip("."),
+            na_rep="n/a",
         )
 
     try:
