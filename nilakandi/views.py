@@ -1,4 +1,3 @@
-
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.http import JsonResponse
@@ -103,4 +102,3 @@ def marketplace(request):
     subs = SubscriptionsModel.objects.all()
     for sub in subs:
         sub.objects.marketplace
-

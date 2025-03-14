@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime as dt
-from datetime import timedelta
+from datetime import time, timedelta
 from re import sub
 from typing import Iterable
 from zoneinfo import ZoneInfo
@@ -29,6 +29,10 @@ from pandas import DataFrame
 from nilakandi.models import Marketplace as MarketplacesModel
 from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
+from nilakandi.models import VirtualMachine as VirtualMachineModel
+from nilakandi.models import VirtualMachineCost as VirtualMachineCostModel
+
+from .miscellaneous import getlastmonth
 
 
 class Auth:
@@ -111,7 +115,6 @@ class Services:
         Returns:
             Services: Azure API Services object
         """
-
         client = CostManagementClient(credential=self.auth.credential)
         self.scope = self.subscription.id
         self.query = QueryDefinition(
@@ -194,6 +197,8 @@ class Services:
                 for col in next_res["properties"]["columns"]
             ],
         )
+        # self.res['usage_date'] = to_datetime(self.res['usage_date'].astype(
+        #     str), format="%Y%m%d")
         return self
 
     def db_save(
@@ -243,7 +248,6 @@ class Services:
             )
         else:
             ServicesModel.objects.bulk_create(data, batch_size=500)
-
         return self
 
     def __dict__(self) -> dict:
@@ -253,7 +257,6 @@ class Services:
 class Subscriptions:
     """Subscriptions class to get all subscriptions from Azure API
     use Azure API SubscriptionClient
-
     """
 
     def __init__(self, auth: Auth) -> None:
@@ -268,9 +271,7 @@ class Subscriptions:
         """Get Data from Azure API
 
         Returns:
-
             Subscriptions: Azure Api Subscriptions object
-
         """
         client = SubscriptionClient(credential=self.auth.credential)
         self.res = [item.as_dict() for item in client.subscriptions.list()]
@@ -386,7 +387,6 @@ class Marketplaces:
                     is_recurring_charge=raw.get("is_recurring_charge"),
                 )
             )
-
         if check_conflic_on_create:
             MarketplacesModel.objects.bulk_create(
                 data,
@@ -408,5 +408,234 @@ class Marketplaces:
                 ignore_conflicts=ignore_conflicts,
                 update_conflicts=update_conflicts,
             )
+        return self
 
+
+class VirtualMachineCost:
+    def __init__(
+        self,
+        auth: Auth,
+        subscription: SubscriptionsModel,
+    ) -> None:
+        """Class Initializer
+
+        Args:
+            auth (Auth): Auth object
+            subscription (SubscriptionsModel): Subscription object
+        """
+        self.auth = auth
+        self.subscription: SubscriptionsModel = subscription
+
+    def get(self):
+        """Get Virtual Machine Cost Data by Subscriptions from Azure API
+
+        Returns:
+            Billing: Azure API Billing object
+        """
+        client: CostManagementClient = CostManagementClient(
+            credential=self.auth.credential,
+            subscription_id=self.subscription.subscription_id,
+        )
+
+        required_columns = [
+            "BillingMonth",
+            "ResourceId",
+            "ResourceType",
+            "ResourceGroup",
+            "ServiceName",
+            "ResourceGroupName",
+            "ResourceLocation",
+            "ConsumedService",
+            "MeterId",
+            "MeterCategory",
+            "MeterSubcategory",
+            "Meter",
+            "DepartmentName",
+            "SubscriptionId",
+            "SubscriptionName",
+        ]
+
+        start_date, end_date = getlastmonth()
+
+        time_period = QueryTimePeriod(
+            from_property=start_date,  # Convert datetime to ISO format
+            to=end_date,  # Convert datetime to ISO format
+        )
+
+        dataset = QueryDataset(
+            granularity="None",
+            aggregation={
+                "totalCost": QueryAggregation(name="PreTaxCost", function="Sum")
+            },
+            grouping=[
+                QueryGrouping(type="Dimension", name=column)
+                for column in required_columns
+            ],
+        )
+
+        query_parameters = QueryDefinition(
+            timeframe="Custom",
+            time_period=time_period,
+            dataset=dataset,
+            type="Usage",
+        )
+
+        query_result = client.query.usage(
+            scope=f"/subscriptions/{self.subscription.subscription_id}/",
+            parameters=query_parameters,
+        )
+
+        query_result_columns = [column.name for column in query_result.columns]
+
+        self.res: DataFrame = DataFrame(
+            data=query_result.rows, columns=[name for name in query_result_columns]
+        )
+
+        return self
+
+    def db_save(
+        self,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = True,
+        check_conflic_on_create: bool = True,
+    ) -> "VirtualMachineCost":
+        """Save data to DB"""
+        if self.res is None or self.res.empty:
+            print("No data to save")
+            return self
+
+        data = []
+
+        for _, row in self.res.iterrows():
+            billing_month_str = row["BillingMonth"]
+            billing_month_datetime = dt.fromisoformat(
+                billing_month_str.replace("Z", "+00:00")
+            )
+
+            formatted_billing_month = billing_month_datetime.strftime("%Y-%m-%d")
+            data.append(
+                VirtualMachineCostModel(
+                    billing_month=formatted_billing_month,
+                    resource_id=row["ResourceId"],
+                    resource_type=row["ResourceType"],
+                    resource_group=row["ResourceGroup"],
+                    service_name=row["ServiceName"],
+                    resource_group_name=row["ResourceGroupName"],
+                    resource_location=row["ResourceLocation"],
+                    consumed_service=row["ConsumedService"],
+                    meter_id=row["MeterId"],
+                    meter_category=row["MeterCategory"],
+                    meter_sub_category=row["MeterSubcategory"],
+                    meter=row["Meter"],
+                    department_name=row["DepartmentName"],
+                    subscription_id=row["SubscriptionId"],
+                    subscription_name=row["SubscriptionName"],
+                    pretax_cost=row["PreTaxCost"],
+                )
+            )
+
+        if check_conflic_on_create:
+            VirtualMachineCostModel.objects.bulk_create(
+                data,
+                batch_size=500,
+                ignore_conflicts=ignore_conflicts,
+                update_conflicts=update_conflicts,
+                unique_fields=["billing_month", "resource_id", "meter_id"],
+                update_fields=["pretax_cost"],
+            )
+        else:
+            VirtualMachineCostModel.objects.bulk_create(data, batch_size=500)
+
+        return self
+
+    def __dict__(self) -> dict:
+        return self.res.to_dict(orient="records") if self.res is not None else {}
+
+
+class VirtualMachines:
+    def __init__(
+        self,
+        auth: Auth,
+        subscription: SubscriptionsModel,
+    ) -> None:
+        """Class Initializer
+
+        Args:
+            auth (Auth): Auth object
+            subscription (SubscriptionsModel): Subscription object
+        """
+        self.auth = auth
+        self.subscription: SubscriptionsModel = subscription
+
+    def get(self):
+        """Get All VM based on Subscription from Azure API
+
+        Returns:
+            VirtualMachine: Azure API VirtualMachine and VirtualMachine Billing object
+        """
+        client: ComputeManagementClient = ComputeManagementClient(
+            credential=self.auth.credential,
+            subscription_id=self.subscription.subscription_id,
+        )
+
+        self.res = [item.as_dict() for item in client.virtual_machines.list_all()]
+
+        return self
+
+    def db_save(self):
+        """Save Data to DB
+
+        Raises:
+            ValueError: self.res is None or empty
+
+        Returns:
+            VirtualMachine: create or update existing data from DB
+        """
+        if not self.res or self.res is None or len(self.res) == 0:
+            raise ValueError("No data to save")
+        for item in self.res:
+            time_created_str = item.get("time_created")
+            time_created_obj = None
+
+            subs_id = self.subscription.subscription_id
+
+            try:
+                dt_obj = dt.strptime(time_created_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                time_created_obj = time(
+                    dt_obj.hour, dt_obj.minute, dt_obj.second, dt_obj.microsecond
+                )
+            except ValueError:
+                dt_obj = dt.strptime(time_created_str, "%Y-%m-%dT%H:%M:%SZ")
+                time_created_obj = time(dt_obj.hour, dt_obj.minute, dt_obj.second)
+
+                continue
+
+            new_uuid = uuid.uuid4()
+
+            VirtualMachineModel.objects.update_or_create(
+                id=new_uuid,
+                subscription_id=subs_id,
+                defaults={
+                    "vm_subs_id": subs_id,
+                    "name": item.get("name"),
+                    "type": item.get("type"),
+                    "location": item.get("location"),
+                    "tags": item.get("tags", {}),
+                    "resources": item.get("resources", {}),
+                    "identity": item.get("identity", {}),
+                    "zones": item.get("zones", []),
+                    "etag": item.get("etag"),
+                    "hardware_profile": item.get("hardware_profile", {}),
+                    "storage_profile": item.get("storage_profile", {}),
+                    "os_profile": item.get("os_profile", {}),
+                    "network_profile": item.get("network_profile", {}),
+                    "diagnostic_profile": item.get("diagnostic_profile", {}),
+                    "provisioning_state": item.get("provisioning_state"),
+                    "license_type": item.get("license_type"),
+                    "time_created": time_created_obj,
+                    "security_profile": item.get("security_profile", {}),
+                    "additional_capabilities": item.get("additional_capabilities", {}),
+                    "plan": item.get("plan", {}),
+                },
+            )
         return self
