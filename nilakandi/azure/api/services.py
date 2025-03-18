@@ -1,8 +1,7 @@
-from datetime import datetime as dt
-from datetime import timedelta
+from datetime import datetime, timedelta
 from re import sub
 from uuid import UUID
-from zoneinfo import ZoneInfo as zi
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from config.django.base import TIME_ZONE
@@ -22,17 +21,17 @@ class Services:
         bearer_token: str,
         subscription: SubscriptionsModel | UUID,
         base_url: str = "https://management.azure.com",
-        end_date: dt = dt.now(tz=zi(TIME_ZONE)),
-        start_date: dt | None = None,
+        end_date: datetime = datetime.now(tz=ZoneInfo(TIME_ZONE)),
+        start_date: datetime | None = None,
     ):
         """Initialize the Services class.
 
         Args:
-            bearer_token (str): berarer token for the Azure API. <JWT>
+            bearer_token (str): bearer token for the Azure API. <JWT>
             subscription (SubscriptionsModel | UUID): Subscription model or UUID of the subscription.
             base_url (str, optional): The URL of main request. Defaults to "https://management.azure.com".
-            end_date (dt, optional): End date of data gathered. Defaults to dt.now(tz=zi(TIME_ZONE)).
-            start_date (dt | None, optional): Start date of data gathered. Defaults to None.
+            end_date (datetime, optional): End date of data gathered. Defaults to datetime.now(tz=zi(TIME_ZONE)).
+            start_date (datetime | None, optional): Start date of data gathered. Defaults to None.
 
         Raises:
             ValueError: Date deltas must be within 1 year.
@@ -48,9 +47,9 @@ class Services:
             if isinstance(subscription, SubscriptionsModel)
             else SubscriptionsModel.objects.get(subscription_id=subscription)
         )
-        self.end_date: dt = end_date
+        self.end_date: datetime = end_date
         self.res = None
-        self.start_date: dt = (
+        self.start_date: datetime = (
             start_date if start_date else end_date - timedelta(days=30)
         )
         self.uri: str = (
@@ -65,7 +64,7 @@ class Services:
             "Authorization": f"Bearer {bearer_token}",
             "Content-Type": "application/json",
             "ClientType": "Nilakandi-NTT",
-            "x-ms-command-name": "CostAnalysis",
+            "x-ms-command-name": "Nilakandi-CostAnalysis",
         }
         self.payload: dict[str, str | dict] = {
             "type": "ActualCost",
@@ -155,13 +154,13 @@ class Services:
         data: list[ServicesModel] = [
             ServicesModel(
                 subscription=self.subscription,
-                usage_date=dt.strptime(str(row["usage_date"]), "%Y%m%d"),
+                usage_date=datetime.strptime(str(row["usage_date"]), "%Y%m%d"),
                 charge_type=row["charge_type"],
                 service_name=row["service_name"],
                 service_tier=row["service_tier"],
                 meter=row["meter"],
                 part_number=row["part_number"],
-                billing_month=dt.fromisoformat(row["billing_month"]).date(),
+                billing_month=datetime.fromisoformat(row["billing_month"]).date(),
                 resource_id=row["resource_id"],
                 resource_type=row["resource_type"],
                 cost_usd=row["cost_usd"],
@@ -169,18 +168,5 @@ class Services:
             )
             for index, row in self.res.data.iterrows()
         ]
-        ServicesModel.objects.bulk_create(
-            data,
-            batch_size=500,
-            ignore_conflicts=True,
-            # update_conflicts=False,
-            # unique_fields=list(ServicesModel._meta.unique_together[0]),
-            # update_fields=[
-            #     col.name
-            #     for col in ServicesModel._meta.get_fields()
-            #     if hasattr(col, "name")
-            #     and col.name not in ServicesModel._meta.unique_together[0]
-            #     and col is not ServicesModel._meta.pk
-            # ],
-        )
+        ServicesModel.objects.bulk_create(data, batch_size=500, ignore_conflicts=True)
         return self

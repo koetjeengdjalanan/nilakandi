@@ -3,14 +3,15 @@ from datetime import datetime as dt
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
+import tenacity
 from django.conf import settings
 
 
-def wait_retry_after(retry_state):
+def wait_retry_after(retry_state: tenacity.RetryCallState) -> int:
     """Wait for the Retry-After time from the response headers.
 
     Args:
-        retry_state (Requests): Retry state object.
+        retry_state (tenacity.RetryCallState): Retry state object.
 
     Returns:
         int: time to wait in seconds.
@@ -18,9 +19,10 @@ def wait_retry_after(retry_state):
     try:
         response = retry_state.outcome.result()
         if response is not None and "Retry-After" in response.headers:
-            return response.headers["Retry-After"]
+            return int(response.headers["Retry-After"])
     except Exception:
-        return 20
+        pass
+    return 20
 
 
 def yearly_list(start_date: dt, end_date: dt) -> list[tuple[dt, dt]]:

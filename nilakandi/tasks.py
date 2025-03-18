@@ -95,3 +95,6 @@ def grab_marketplaces(
             subscription=sub,
             date=month,
         ).get().db_save()
+
+
+# @shared_task(name="nilakandi.tasks.bulk_cost_export")
