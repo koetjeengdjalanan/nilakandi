@@ -26,6 +26,30 @@ from nilakandi.models import Subscription as SubscriptionsModel
 
 
 class ExportOrCreate:
+    """ExportOrCreate is a class that handles the creation and configuration of cost exports for an Azure subscription.
+
+    Attributes:
+        base_url (str): The base URL for the Azure Management API.
+        subscription (SubscriptionsModel): The subscription model instance.
+        schedules (tuple[datetime, datetime]): The start and end datetime for the schedule.
+        end_date (datetime): The end date for the cost export.
+        start_date (datetime): The start date for the cost export.
+        headers (dict[str, str]): The headers for the HTTP request.
+        payload (dict[str, any]): The payload for the cost export request.
+        res (dict): The response from the export creation request.
+
+    Methods:
+        __init__(bearer_token: str, subscription: SubscriptionsModel | UUID, base_url: str = "https://management.azure.com", end_date: datetime = datetime.now(tz=ZoneInfo(TIME_ZONE)), start_date: datetime | None = None, schedule_start: datetime = datetime.now(tz=ZoneInfo(TIME_ZONE)), schedule_end: datetime = datetime.now(tz=ZoneInfo(TIME_ZONE)) + relativedelta(years=1)):
+            Initializes the ExportOrCreate instance with the provided parameters.
+
+        payload_config(*options, **kwargs) -> "ExportOrCreate":
+
+        exec() -> "ExportOrCreate":
+
+    Raises:
+        ValueError: If the date range is more than 1 month or if the end date/schedules are before the start date/schedules.
+    """
+
     def __init__(
         self,
         bearer_token: str,
@@ -37,6 +61,15 @@ class ExportOrCreate:
         schedule_end: datetime = datetime.now(tz=ZoneInfo(TIME_ZONE))
         + relativedelta(years=1),
     ):
+        date_diff = relativedelta(dt1=end_date, dt2=start_date)
+        if start_date is not None and (date_diff.months > 1 or date_diff.days > 30):
+            raise ValueError("Date range must be within 1 month")
+        if start_date is not None and (
+            end_date < start_date or schedule_end < schedule_start
+        ):
+            raise ValueError(
+                "End date/schedules must be greater than start date/schedules"
+            )
         self.base_url = base_url
         self.subscription: SubscriptionsModel = (
             subscription
@@ -184,26 +217,58 @@ class ExportOrCreate:
         }
         return self
 
-    # @retry(
-    #     stop=stop_after_attempt(5),
-    #     reraise=True,
-    #     wait=wait_retry_after,
-    # )
+    @retry(
+        stop=stop_after_attempt(5),
+        reraise=True,
+        wait=wait_retry_after,
+        retry=retry_if_exception(
+            lambda e: isinstance(e, requests.HTTPError)
+            and e.response.status_code != 404
+        ),
+        before_sleep=before_sleep_log(
+            logging.getLogger("nilakandi.pull"), logging.WARN
+        ),
+        after=after_log(logging.getLogger("nilakandi.pull"), logging.INFO),
+    )
     def exec(self) -> "ExportOrCreate":
-        raise NotImplementedError("Method not implemented Yet")
-        reqRes = requests.put(
-            url=f"{self.base_url}{self.subscription.id}/providers/Microsoft.CostManagement/exports/Nilakandi-NTT-Export",
-            params={"api-version": "2023-07-01-preview"},
-            headers=self.headers,
-            json=self.payload,
+        """
+        Executes the export creation process for the given subscription.
+
+        This method sends a PUT request to the Azure Cost Management API to create
+        an export for the specified subscription. If the request is successful, the
+        response is stored in the `res` attribute and the method returns the current
+        instance. If the request fails with a 404 status code, an error is logged.
+
+        Returns:
+            ExportOrCreate: The current instance with the response data.
+
+        Raises:
+            requests.HTTPError: If the request fails with an HTTP error other than 404.
+        """
+        logging.getLogger("nilakandi.pull").info(
+            f"Creating export for {self.subscription} - {self.start_date} to {self.end_date}"
         )
-        reqRes.raise_for_status()
-        self.res = reqRes.json().copy()
-        return self
+        try:
+            reqRes = requests.put(
+                url=f"{self.base_url}{self.subscription.id}/providers/Microsoft.CostManagement/exports/Nilakandi-NTT-Export",
+                params={"api-version": "2023-07-01-preview"},
+                headers=self.headers,
+                json=self.payload,
+            )
+            reqRes.raise_for_status()
+            self.res = reqRes.json().copy()
+            return self
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                logging.getLogger("nilakandi.pull").error(
+                    f"Data not found for {self.subscription} (HTTP 404)"
+                )
+            raise
 
 
 class ExportHistory:
     """ExportHistory class for managing export history data from Azure API.
+    ref: https://learn.microsoft.com/en-us/rest/api/cost-management/exports/get-execution-history?view=rest-cost-management-2023-07-01-preview&tabs=HTTP#exportrunhistorygetbysubscription
 
     Attributes:
         headers (dict[str, str]): HTTP headers for the API requests.
@@ -267,7 +332,7 @@ class ExportHistory:
             ExportHistory: The instance of the class with the response data.
         """
         logging.getLogger("nilakandi.pull").info(
-            f"Pulling data for {self.subscription}"
+            f"Pulling history for {self.subscription}"
         )
         try:
             reqRes = requests.get(

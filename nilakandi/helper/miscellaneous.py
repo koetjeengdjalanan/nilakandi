@@ -1,6 +1,5 @@
 import calendar
-from datetime import datetime as dt
-from datetime import timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import tenacity
@@ -25,18 +24,20 @@ def wait_retry_after(retry_state: tenacity.RetryCallState) -> int:
     return 20
 
 
-def yearly_list(start_date: dt, end_date: dt) -> list[tuple[dt, dt]]:
+def yearly_list(
+    start_date: datetime, end_date: datetime
+) -> list[tuple[datetime, datetime]]:
     """Yearly list of dates between start_date and end_date.
 
     Args:
-        start_date (dt): Start Date to generate the list.
-        end_date (dt): End Date to generate the list.
+        start_date (datetime): Start Date to generate the list.
+        end_date (datetime): End Date to generate the list.
 
     Raises:
         ValueError: End date should always be greater then start date. Except in the event of time travels has ben invented.
 
     Returns:
-        list[tuple[dt, dt]]: List of yearly dates.
+        list[tuple[datetime, datetime]]: List of yearly dates.
     """
     if end_date < start_date:
         raise ValueError(
@@ -45,14 +46,14 @@ def yearly_list(start_date: dt, end_date: dt) -> list[tuple[dt, dt]]:
     if end_date - start_date > timedelta(days=364):
         dates = [
             (
-                dt.combine(
+                datetime.combine(
                     start_date + timedelta(days=364 * i),
-                    dt.min.time(),
+                    datetime.min.time(),
                     tzinfo=ZoneInfo(settings.TIME_ZONE),
                 ),
-                dt.combine(
+                datetime.combine(
                     start_date + timedelta(days=364 * (i + 1)),
-                    dt.max.time(),
+                    datetime.max.time(),
                     tzinfo=ZoneInfo(settings.TIME_ZONE),
                 ),
             )
@@ -62,19 +63,21 @@ def yearly_list(start_date: dt, end_date: dt) -> list[tuple[dt, dt]]:
             dates.append(
                 (
                     dates[-1][1] + timedelta(seconds=1),
-                    dt.combine(
-                        end_date, dt.max.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)
+                    datetime.combine(
+                        end_date,
+                        datetime.max.time(),
+                        tzinfo=ZoneInfo(settings.TIME_ZONE),
                     ),
                 )
             )
     else:
         dates = [
             (
-                dt.combine(
-                    start_date, dt.min.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)
+                datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)
                 ),
-                dt.combine(
-                    end_date, dt.max.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)
+                datetime.combine(
+                    end_date, datetime.max.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)
                 ),
             )
         ]
@@ -83,7 +86,7 @@ def yearly_list(start_date: dt, end_date: dt) -> list[tuple[dt, dt]]:
 
 def getlastmonth():
     """currently used by sml procedure"""
-    right_now = dt.now()
+    right_now = datetime.now()
 
     # first_day_current_month = dt(right_now.year, right_now.month, 1)
 
@@ -94,10 +97,13 @@ def getlastmonth():
         previous_month = right_now.month - 1
         year = right_now.year
 
-    first_day_previous_month = dt(year, previous_month, 1)
+    first_day_previous_month = datetime(year, previous_month, 1)
 
-    last_day_previous_month = dt(
+    last_day_previous_month = datetime(
         year, previous_month, calendar.monthrange(year, previous_month)[1]
     )
 
     return first_day_previous_month, last_day_previous_month
+
+
+# def generate_date_range(start_date:datetime, end_date: datetime) -> Iterable[datetime]:

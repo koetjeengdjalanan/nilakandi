@@ -4,6 +4,7 @@ from uuid import UUID
 from celery import shared_task
 from dateutil.relativedelta import relativedelta
 
+from nilakandi.azure.api.costexport import ExportOrCreate
 from nilakandi.azure.api.services import Services
 from nilakandi.helper import azure_api as azi
 from nilakandi.helper.miscellaneous import yearly_list
@@ -97,4 +98,32 @@ def grab_marketplaces(
         ).get().db_save()
 
 
-# @shared_task(name="nilakandi.tasks.bulk_cost_export")
+@shared_task(name="nilakandi.tasks.cost_export")
+def export_costs_to_blob(
+    bearer: str,
+    subscription_id: UUID,
+    start_date: datetime,
+    end_date: datetime,
+) -> list[dict[str, any]]:
+    exports = []
+    current = start_date
+    while current < end_date:
+        end_of_month = datetime.combine(
+            current + relativedelta(month=0, day=31), datetime.max.time()
+        )
+        if end_of_month > end_date:
+            end_of_month = end_date
+        exports.append(
+            ExportOrCreate(
+                bearer_token=bearer,
+                subscription=subscription_id,
+                start_date=current,
+                end_date=end_of_month,
+            )
+            .exec()
+            .res
+        )
+        current = datetime.combine(
+            end_of_month + relativedelta(days=1), datetime.min.time()
+        )
+    return exports
