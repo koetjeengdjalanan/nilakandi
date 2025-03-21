@@ -26,7 +26,7 @@ SECRET_KEY = env(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env("DEBUG", default=True)
+DEBUG: bool = env("DEBUG", default=True)
 
 ALLOWED_HOSTS = ["*"]
 
@@ -141,4 +141,5 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 from config.settings.azure import *  # noqa: E402, F403
 from config.settings.celery import *  # noqa: E402, F403
+from config.settings.logging import *  # noqa: E402, F403
 from config.settings.redis import *  # noqa: E402, F403

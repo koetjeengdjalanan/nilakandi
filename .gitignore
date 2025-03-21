@@ -142,3 +142,5 @@ dmypy.json
 # Dev Related
 
 debug*
+devAssets/
+devAssets/*
