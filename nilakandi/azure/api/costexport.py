@@ -20,6 +20,7 @@ from config.django.base import (
     DEBUG,
     TIME_ZONE,
 )
+from config.django.local import SKIPPABLE_HTTP_ERROR
 from nilakandi.helper.miscellaneous import wait_retry_after
 from nilakandi.models import ExportHistory as ExportHistoryModel
 from nilakandi.models import Subscription as SubscriptionsModel
@@ -49,6 +50,8 @@ class ExportOrCreate:
     Raises:
         ValueError: If the date range is more than 1 month or if the end date/schedules are before the start date/schedules.
     """
+
+    res: dict[str, any] | None = None
 
     def __init__(
         self,
@@ -80,7 +83,7 @@ class ExportOrCreate:
             schedule_start,
             schedule_end,
         )
-        self.end_date: datetime = end_date
+        self.end_date: datetime = datetime.combine(end_date, datetime.min.time())
         self.start_date: datetime = (
             start_date
             if start_date is not None
@@ -180,7 +183,7 @@ class ExportOrCreate:
                 "deliveryInfo": (
                     {
                         "destination": {
-                            "resourceId": f"{self.subscription.id}/resourceGroups/Utilities/providers/Microsoft.Storage/storageAccounts/{AZURE_STORAGE_ACCOUNT_NAME}",
+                            "resourceId": f"/subscriptions/5b765b14-6df2-4233-a20f-47c8d2385264/resourceGroups/Utilities/providers/Microsoft.Storage/storageAccounts/{AZURE_STORAGE_ACCOUNT_NAME}",
                             "container": AZURE_STORAGE_CONTAINER,
                             "rootFolderPath": str(self.subscription.subscription_id),
                         }
@@ -223,7 +226,7 @@ class ExportOrCreate:
         wait=wait_retry_after,
         retry=retry_if_exception(
             lambda e: isinstance(e, requests.HTTPError)
-            and e.response.status_code != 404
+            and e.response.status_code not in SKIPPABLE_HTTP_ERROR
         ),
         before_sleep=before_sleep_log(
             logging.getLogger("nilakandi.pull"), logging.WARN
@@ -257,6 +260,39 @@ class ExportOrCreate:
             )
             reqRes.raise_for_status()
             self.res = reqRes.json().copy()
+            return self
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                logging.getLogger("nilakandi.pull").error(
+                    f"Data not found for {self.subscription} (HTTP 404)"
+                )
+            raise
+
+    @retry(
+        stop=stop_after_attempt(5),
+        reraise=True,
+        wait=wait_retry_after,
+        retry=retry_if_exception(
+            lambda e: isinstance(e, requests.HTTPError)
+            and e.response.status_code not in SKIPPABLE_HTTP_ERROR
+        ),
+        before_sleep=before_sleep_log(
+            logging.getLogger("nilakandi.pull"), logging.WARN
+        ),
+        after=after_log(logging.getLogger("nilakandi.pull"), logging.INFO),
+    )
+    def run(self) -> "ExportOrCreate":
+        logging.getLogger("nilakandi.pull").info(
+            f"Run export generation for {self.subscription} - {self.start_date} to {self.end_date}"
+        )
+        try:
+            reqRes = requests.post(
+                url=f"{self.base_url}{self.subscription.id}/providers/Microsoft.CostManagement/exports/Nilakandi-NTT-Export/run",
+                params={"api-version": "2023-07-01-preview"},
+                headers=self.headers,
+            )
+            reqRes.raise_for_status()
+            # self.gen = reqRes.json().copy()
             return self
         except requests.HTTPError as e:
             if e.response.status_code == 404:
@@ -312,7 +348,7 @@ class ExportHistory:
         wait=wait_retry_after,
         retry=retry_if_exception(
             lambda e: isinstance(e, requests.HTTPError)
-            and e.response.status_code != 404
+            and e.response.status_code not in SKIPPABLE_HTTP_ERROR
         ),
         before_sleep=before_sleep_log(
             logging.getLogger("nilakandi.pull"), logging.WARN
@@ -369,8 +405,12 @@ class ExportHistory:
         Returns:
             ExportHistory: The instance of the class on which this method is called.
         """
-        if not self.res or "value" not in self.res:
-            logging.getLogger("django.db.save").warning("No data to save")
+        if not self.res or "value" not in self.res or not self.res["value"]:
+            logging.getLogger("django.db.save").warning(
+                f"No data to save ({self.subscription}): " + str(self.res)
+                if self.res
+                else "null"
+            )
             raise ValueError("No data to save")
         data: list[ExportHistoryModel] = []
         for res in self.res.get("value", []):

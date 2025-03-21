@@ -109,11 +109,11 @@ def export_costs_to_blob(
     current = start_date
     while current < end_date:
         end_of_month = datetime.combine(
-            current + relativedelta(month=0, day=31), datetime.max.time()
+            current + relativedelta(month=0, day=31), datetime.min.time()
         )
         if end_of_month > end_date:
             end_of_month = end_date
-        exports.append(
+        eoc = (
             ExportOrCreate(
                 bearer_token=bearer,
                 subscription=subscription_id,
@@ -121,8 +121,9 @@ def export_costs_to_blob(
                 end_date=end_of_month,
             )
             .exec()
-            .res
+            .run()
         )
+        exports.append(eoc.res)
         current = datetime.combine(
             end_of_month + relativedelta(days=1), datetime.min.time()
         )

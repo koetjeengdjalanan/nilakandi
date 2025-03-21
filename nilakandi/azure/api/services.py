@@ -1,20 +1,53 @@
+import logging
 from datetime import datetime, timedelta
 from re import sub
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from requests import exceptions, post
+from tenacity import (
+    after_log,
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+)
+
 from config.django.base import TIME_ZONE
+from config.django.local import SKIPPABLE_HTTP_ERROR
 from nilakandi.azure.models import ApiResult
 from nilakandi.helper.miscellaneous import wait_retry_after
 from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
-from requests import exceptions, post
-from tenacity import retry, retry_if_exception, stop_after_attempt
 
 
 class Services:
-    """Services class to pull data from Azure API and save it to the database."""
+    """Services class for interacting with the Microsoft Azure API to pull and save cost management data.
+    ref: https://learn.microsoft.com/en-us/rest/api/cost-management/query/usage?view=rest-cost-management-2024-08-01&tabs=HTTP
+
+    Attributes:
+        bearer_token (str): Bearer token for the Azure API.
+        subscription (SubscriptionsModel): Subscription model or UUID of the subscription.
+        base_url (str): The base URL for the Azure API.
+        end_date (datetime): End date for the data gathered.
+        start_date (datetime): Start date for the data gathered.
+        uri (str): The URI for the API request.
+        params (dict): Parameters for the API request.
+        headers (dict): Headers for the API request.
+        payload (dict): Payload for the API request.
+        res (ApiResult): Result of the API request.
+
+    Methods:
+        __init__(bearer_token: str, subscription: SubscriptionsModel | UUID, base_url: str = "https://management.azure.com", end_date: datetime = datetime.now(tz=ZoneInfo(TIME_ZONE)), start_date: datetime | None = None):
+            Initializes the Services class with the provided parameters.
+
+        pull(uri: str | None = None) -> "Services":
+            Pulls data from the Microsoft Azure API using a REST request.
+
+        db_save() -> "Services":
+            Saves the gathered data to the database.
+    """
 
     def __init__(
         self,
@@ -96,17 +129,26 @@ class Services:
         wait=wait_retry_after,
         retry=retry_if_exception(
             lambda e: isinstance(e, exceptions.HTTPError)
-            and e.response.status_code == 429
+            and e.response.status_code not in SKIPPABLE_HTTP_ERROR
         ),
+        before_sleep=before_sleep_log(
+            logging.getLogger("nilakandi.pull"), logging.WARN
+        ),
+        after=after_log(logging.getLogger("nilakandi.pull"), logging.INFO),
     )
     def pull(self, uri: str | None = None) -> "Services":
-        """Pulling data from Microsoft Azure API using REST
+        """
+        Pulls data from the specified URI or the default URI if none is provided.
 
         Args:
-            uri (str | None, optional): URL, If provided will replace the class declared uri. Defaults to None.
+            uri (str | None): The URI to pull data from. If None, the default URI is used.
 
         Returns:
-            Services: Services class object.
+            Services: The instance of the Services class with the pulled data.
+
+        Raises:
+            HTTPError: If the HTTP request returned an unsuccessful status code.
+
         """
         reqRes = post(
             url=self.uri if (uri is None) else uri,
