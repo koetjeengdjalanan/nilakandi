@@ -1,3 +1,4 @@
+import logging
 import sys
 from datetime import datetime as dt
 from time import sleep
@@ -9,7 +10,7 @@ from django.core.management.base import BaseCommand
 
 from nilakandi.helper import azure_api
 from nilakandi.models import Subscription
-from nilakandi.tasks import grab_marketplaces, grab_services
+from nilakandi.tasks import grab_cost_export_history, grab_marketplaces, grab_services
 
 
 class Command(BaseCommand):
@@ -46,7 +47,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        print(options)
+        logging.getLogger("django").warning(f"Populating database, {options=}")
         start_date = dt.fromisoformat(options["start_date"]).replace(
             tzinfo=ZoneInfo(settings.TIME_ZONE)
         )
@@ -77,6 +78,8 @@ class Command(BaseCommand):
             f"{Subscription.objects.count()=} {", ".join(list(Subscription.objects.values_list('display_name', flat=True)))}\n"
         )
         for id in subs_id_list:
+            sub: str = Subscription.objects.get(subscription_id=id).display_name
+            logging.getLogger("django").info(f"Processing for: {sub}")
             grab_services.delay(
                 bearer=auth.token.token,
                 subscription_id=id,
@@ -93,5 +96,9 @@ class Command(BaseCommand):
                 start_date=start_date,
                 end_date=end_date,
             )
+            grab_cost_export_history.delay(
+                bearer=auth.token.token,
+                subscription_id=id
+            )
             sleep(options["delay"])
-        sys.stdout.write("Task has been queued\n")
+        logging.getLogger("django").info("Task has been queued")

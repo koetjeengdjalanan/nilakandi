@@ -4,7 +4,7 @@ from uuid import UUID
 from celery import shared_task
 from dateutil.relativedelta import relativedelta
 
-from nilakandi.azure.api.costexport import ExportOrCreate
+from nilakandi.azure.api.costexport import ExportHistory, ExportOrCreate
 from nilakandi.azure.api.services import Services
 from nilakandi.helper import azure_api as azi
 from nilakandi.helper.miscellaneous import yearly_list
@@ -105,6 +105,18 @@ def export_costs_to_blob(
     start_date: datetime,
     end_date: datetime,
 ) -> list[dict[str, any]]:
+    """
+    Export costs to a blob storage for a given subscription within a date range.
+
+    Args:
+        bearer (str): The bearer token for authentication.
+        subscription_id (UUID): The subscription ID for which costs are to be exported.
+        start_date (datetime): The start date of the export period.
+        end_date (datetime): The end date of the export period.
+
+    Returns:
+        list[dict[str, any]]: A list of dictionaries containing the exported cost data.
+    """
     exports = []
     current = start_date
     while current < end_date:
@@ -128,3 +140,29 @@ def export_costs_to_blob(
             end_of_month + relativedelta(days=1), datetime.min.time()
         )
     return exports
+
+
+@shared_task(name="nilakandi.tasks.grab_cost_export_history")
+def grab_cost_export_history(
+    bearer: str,
+    subscription_id: UUID,
+) -> dict[str, any]:
+    """
+    Retrieves and saves the cost export history for a given subscription.
+
+    Args:
+        bearer (str): The bearer token for authentication.
+        subscription_id (UUID): The unique identifier for the subscription.
+
+    Returns:
+        dict[str, any]: A dictionary containing the result of the export history retrieval and save operation.
+    """
+    res = (
+        ExportHistory(
+            bearer_token=bearer,
+            subscription=subscription_id,
+        )
+        .pull()
+        .db_save()
+    )
+    return res.res
