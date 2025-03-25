@@ -6,9 +6,9 @@ from config.env import env
 
 import os
 
-from celery import Celery
+from celery import Celery  # noqa: F811
 
-from config.env import BASE_DIR, env
+from config.env import BASE_DIR, env  # noqa: F811
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.django.local")
 env.read_env(os.path.join(BASE_DIR, ".env"))

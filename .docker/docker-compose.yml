@@ -7,7 +7,7 @@ services:
     build:
       context: ..
       dockerfile: .docker/web/Dockerfile
-    # restart: never
+    restart: always
     user: arjuna
     entrypoint: poetry run python manage.py entry_point
     stdin_open: true
