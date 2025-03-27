@@ -11,3 +11,6 @@ SKIPPABLE_HTTP_ERROR: list[int] = [
     500,  # Internal Server Error
     501,  # Not Implemented
 ]
+EARLIEST_DATA: str = (
+    env("EARLIEST_DATA", default="20200101") if not DEBUG else "20250101"  # noqa: F405
+)

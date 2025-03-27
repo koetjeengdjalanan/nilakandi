@@ -335,12 +335,12 @@ class ExportHistory:
             "ClientType": "Nilakandi-NTT",
             "x-ms-command-name": "Nilakandi-CostExport",
         }
-        self.url = f"{base_url}{subscription.id}/providers/Microsoft.CostManagement/exports/{export_name}/runHistory"
         self.subscription: SubscriptionsModel = (
             subscription
             if isinstance(subscription, SubscriptionsModel)
             else SubscriptionsModel.objects.get(subscription_id=subscription)
         )
+        self.url = f"{base_url}{self.subscription.id}/providers/Microsoft.CostManagement/exports/{export_name}/runHistory"
 
     @retry(
         stop=stop_after_attempt(5),

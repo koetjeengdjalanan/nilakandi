@@ -1,8 +1,9 @@
 import logging
 
-from django.core.management.base import BaseCommand
-from django.core.management import call_command
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
 
 from config.env import env
 
@@ -34,7 +35,7 @@ class Command(BaseCommand):
         logging.getLogger("django.db").info("Migrating database...")
         call_command("migrate", interactive=False)
         logging.getLogger("django.db").info("Populating database...")
-        call_command("populate_db", start_date="20250201")
+        call_command("populate_db", start_date=settings.EARLIEST_DATA)
         logging.getLogger("django").info("Creating superuser...")
         su_creds: dict[str, str] = {
             "user_name": env(var="NILAKANDI_SUPER_USER_USERNAME", default="arjuna"),
@@ -45,11 +46,12 @@ class Command(BaseCommand):
                 var="NILAKANDI_SUPER_USER_EMAIL", default="arjuna@nilakandi.local"
             ),
         }
-        if User.objects.get(username=su_creds["user_name"]):
+        try:
+            User.objects.get(username=su_creds["user_name"])
             logging.getLogger("django").info(
                 "Superuser already exists. Skipping superuser creation."
             )
-        else:
+        except User.DoesNotExist:
             User.objects.create_superuser(
                 username=su_creds["user_name"],
                 password=su_creds["password"],
