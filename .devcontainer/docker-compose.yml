@@ -40,23 +40,6 @@ services:
     networks:
       - Dev-nilakandi-net
 
-  minio:
-    hostname: Nilakandi-minio
-    container_name: Nilakandi-minio
-    image: minio/minio
-    restart: always
-    volumes:
-      - minio-data:/data
-    environment:
-      MINIO_ROOT_USER: arjuna
-      MINIO_ROOT_PASSWORD: admin123
-    ports:
-      - "21190:9000"
-      - "21191:9001"
-    command: server /data --console-address ":9001"
-    networks:
-      - Dev-nilakandi-net
-
 networks:
   Dev-nilakandi-net:
     driver: bridge
