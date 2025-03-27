@@ -1,22 +1,6 @@
 name: Nilakandi
 
 services:
-  migrate:
-    hostname: Nilakandi-migrate
-    container_name: Nilakandi-migrate
-    build:
-      context: ..
-      dockerfile: .docker/web/Dockerfile
-    restart: "no"
-    user: arjuna
-    entrypoint: sh -c "poetry run python manage.py makemigrations nilakandi && poetry run python manage.py migrate"
-    volumes:
-      - ../.env:/app/.env:ro
-    networks:
-      - nilakandi-net
-    depends_on:
-      - db
-
   web:
     hostname: Nilakandi-web
     container_name: Nilakandi-web
@@ -25,7 +9,7 @@ services:
       dockerfile: .docker/web/Dockerfile
     restart: always
     user: arjuna
-    command: poetry run python manage.py runserver 0.0.0.0:21180
+    entrypoint: poetry run python manage.py entry_point
     stdin_open: true
     tty: true
     ports:
@@ -35,7 +19,6 @@ services:
     networks:
       - nilakandi-net
     depends_on:
-      - migrate
       - db
       - redis
 
@@ -55,7 +38,6 @@ services:
       - nilakandi-net
     depends_on:
       - web
-      - migrate
 
   db:
     hostname: Nilakandi-db
@@ -87,4 +69,6 @@ networks:
 
 volumes:
   nilakandi-db-data:
+    driver: local
+  minio-data:
     driver: local

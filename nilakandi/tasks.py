@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
-from time import sleep
+from datetime import datetime
 from uuid import UUID
 
 from celery import shared_task
+from dateutil.relativedelta import relativedelta
 
+from nilakandi.azure.api.costexport import ExportHistory, ExportOrCreate
 from nilakandi.azure.api.services import Services
 from nilakandi.helper import azure_api as azi
 from nilakandi.helper.miscellaneous import yearly_list
@@ -80,23 +81,88 @@ def grab_marketplaces(
         client_secret=creds["client_secret"],
     )
     sub = SubscriptionsModel.objects.get(subscription_id=subscription_id)
-    # earliest: datetime.date = sub.marketplace_set.earliest('usage_start').usage_start
-    # latest: datetime.date = sub.marketplace_set.latest('usage_end').usage_end
-    loopedDate = start_date
-    while loopedDate <= end_date:
-        deltaDays: int = (
-            3 if (end_date - start_date).days >= 3 else (end_date - start_date).days
+    month_list = [
+        (start_date + relativedelta(months=i)).strftime("%Y%m")
+        for i in range(
+            (end_date.year - start_date.year) * 12
+            + end_date.month
+            - start_date.month
+            + 1
         )
-        tempDate = loopedDate + timedelta(days=deltaDays)
-        marketplace = azi.Marketplaces(
-
+    ]
+    for month in month_list:
+        azi.Marketplaces(
             auth=auth,
             subscription=sub,
-            start_date=loopedDate,
-            end_date=tempDate,
+            date=month,
+        ).get().db_save()
+
+
+@shared_task(name="nilakandi.tasks.cost_export")
+def export_costs_to_blob(
+    bearer: str,
+    subscription_id: UUID,
+    start_date: datetime,
+    end_date: datetime,
+) -> list[dict[str, any]]:
+    """
+    Export costs to a blob storage for a given subscription within a date range.
+
+    Args:
+        bearer (str): The bearer token for authentication.
+        subscription_id (UUID): The subscription ID for which costs are to be exported.
+        start_date (datetime): The start date of the export period.
+        end_date (datetime): The end date of the export period.
+
+    Returns:
+        list[dict[str, any]]: A list of dictionaries containing the exported cost data.
+    """
+    exports = []
+    current = start_date
+    while current < end_date:
+        end_of_month = datetime.combine(
+            current + relativedelta(month=0, day=31), datetime.min.time()
         )
+        if end_of_month > end_date:
+            end_of_month = end_date
+        eoc = (
+            ExportOrCreate(
+                bearer_token=bearer,
+                subscription=subscription_id,
+                start_date=current,
+                end_date=end_of_month,
+            )
+            .exec()
+            .run()
+        )
+        exports.append(eoc.res)
+        current = datetime.combine(
+            end_of_month + relativedelta(days=1), datetime.min.time()
+        )
+    return exports
 
-        marketplace.get().db_save()
-        sleep(0.75)
-        loopedDate += timedelta(days=deltaDays + 1)
 
+@shared_task(name="nilakandi.tasks.grab_cost_export_history")
+def grab_cost_export_history(
+    bearer: str,
+    subscription_id: UUID,
+) -> dict[str, any]:
+    """
+    Retrieves and saves the cost export history for a given subscription.
+
+    Args:
+        bearer (str): The bearer token for authentication.
+        subscription_id (UUID): The unique identifier for the subscription.
+
+    Returns:
+        dict[str, any]: A dictionary containing the result of the export history retrieval and save operation.
+    """
+    res = (
+        ExportHistory(
+            bearer_token=bearer,
+            subscription=subscription_id,
+        )
+        .pull()
+        .db_save()
+    )
+    return res.res
