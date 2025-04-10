@@ -25,7 +25,7 @@ LOGGING = {
     },
     "handlers": {
         "file": {
-            "level": LOG_LEVEL,
+            "level": "INFO",
             "class": "logging.handlers.TimedRotatingFileHandler",
             "filename": Path(LOG_DIR, "nilakandi.log"),
             "when": "D",

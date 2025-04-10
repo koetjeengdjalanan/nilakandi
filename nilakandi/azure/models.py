@@ -1,7 +1,8 @@
 from typing import Any, Dict, List, Optional, TypeVar, Union
+from uuid import UUID
 
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 PandasDataFrame = TypeVar("pandas.core.frame.DataFrame")
 
@@ -24,3 +25,23 @@ class ApiResult(BaseModel):
     next_link: Optional[str] = None
     raw: Optional[Union[List[Dict[str, Any]], Dict[str, Any]]] = None
     data: PandasDataFrame = pd.DataFrame()
+
+
+class BlobsInfo(BaseModel):
+    """
+    BlobsInfo is a Pydantic model that represents information about a blob.
+
+    Attributes:
+        blob_name (str): The name of the blob. This field is populated using the alias "blobName".
+        byte_count (int): The size of the blob in bytes. This field is populated using the alias "byteCount".
+        data_row_count (int): The number of data rows in the blob. This field is populated using the alias "dataRowCount".
+        export_history (UUID): The export history associated with the blob. This field is populated using the alias "ExportHistory".
+    """
+
+    blob_name: str = Field(alias="blobName")
+    byte_count: int = Field(alias="byteCount")
+    data_row_count: int = Field(alias="dataRowCount")
+    export_history_id: UUID = Field(alias="exportHistoryId")
+
+    class Config:
+        populate_by_name = True
