@@ -1,19 +1,26 @@
+{% load static %}
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="description" content="Azure Report Automation">
+    <meta name="keywords" content="Python, Htmx, Django, Azure">
+
     <title>
       {% block title %}
         Nilakandi
       {% endblock title %}
     </title>
+    
     {% load django_bootstrap5 %}
     {% bootstrap_css %}
     {% bootstrap_javascript %}
+
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   </head>
   <body>
-    {% include "navbar.html" %}
+    {% include "partials/navbar.html" %}
     {% comment %} <div class="container">
       <br />
       <br />
