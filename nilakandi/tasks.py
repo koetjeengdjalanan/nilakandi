@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 from nilakandi.azure.api.costexport import ExportHistory, ExportOrCreate
 from nilakandi.azure.api.services import Services
 from nilakandi.helper import azure_api as azi
+from nilakandi.helper.azure_blob import Blobs
 from nilakandi.helper.miscellaneous import yearly_list
 from nilakandi.models import Subscription as SubscriptionsModel
 
@@ -166,3 +167,30 @@ def grab_cost_export_history(
         .db_save()
     )
     return res.res
+
+
+@shared_task(name="nilakandi.tasks.grab_blobs")
+def grab_blobs(
+    creds: dict[str, str],
+    subscription_id: UUID,
+    start_date: datetime,
+    end_date: datetime,
+) -> int:
+    auth = azi.Auth(
+        client_id=creds["client_id"],
+        tenant_id=creds["tenant_id"],
+        client_secret=creds["client_secret"],
+    )
+    blobs: Blobs = (
+        Blobs(
+            container_name="testcontainer",
+            auth=auth,
+            subscription=subscription_id,
+        )
+        .aggregate_manifest_details(
+            start_date=start_date,
+            end_date=end_date,
+        )
+        .import_blobs_from_manifest()
+    )
+    return blobs.total_imported

@@ -1,15 +1,17 @@
 import io
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, Optional, Union
 from uuid import UUID
 
 import pandas as pd
-from azure.storage.blob import BlobClient, BlobServiceClient
+from azure.storage.blob import BlobClient, BlobServiceClient, ExponentialRetry
 from caseutil import to_snake
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from numpy import nan
+from psycopg2.extras import DateTimeTZRange
 
 from nilakandi.azure.models import BlobsInfo
 from nilakandi.helper.azure_api import Auth
@@ -19,6 +21,34 @@ from nilakandi.models import Subscription as SubscriptionModel
 
 
 class Blobs:
+    """
+    Blobs class for Azure Blob Storage operations and data import into databases.
+
+    This class provides functionality to interact with Azure Blob Storage, retrieve blob metadata,
+    read manifest files, and import CSV data from blobs into a database. It handles data
+    transformation, validation, and bulk database operations.
+
+    Attributes:
+        tobe_processed (int): Counter for blobs waiting to be processed.
+        total_imported (int): Counter for total records successfully imported.
+        collected_blob_data (list[BlobsInfo]): Collection of blob metadata information.
+
+    Example:
+        >>> auth = Auth(...)
+        >>> subscription_id = UUID('...')
+        >>> blobs = Blobs('container-name', auth, subscription_id)
+        >>> blobs.aggregate_manifest_details(start_date=datetime(2023, 1, 1))
+        >>> blobs.import_blobs_from_manifest()
+        >>> blobs.aggregate_manifest_details().import_blobs_from_manifest()
+
+    Dependencies:
+        - Azure SDK for Python (azure-storage-blob)
+        - pandas for CSV processing
+        - Django for database operations
+        - BlobsInfo model for metadata structure
+        - ExportHistoryModel and ExportReport models for database operations
+    """
+
     tobe_processed: int = 0
     total_imported: int = 0
     collected_blob_data: list[BlobsInfo] = []
@@ -29,10 +59,12 @@ class Blobs:
         auth: Auth,
         subscription: Union[SubscriptionModel | UUID],
     ):
+        retry = ExponentialRetry(initial_backoff=5, retry_total=15)
         self.container_name = container_name
         self.blob_service_client = BlobServiceClient(
             account_url="https://stanillakandi.blob.core.windows.net",
             credential=auth.credential,
+            retry_policy=retry,
         )
         self.subscription: SubscriptionModel = (
             subscription
@@ -44,6 +76,17 @@ class Blobs:
         return f"Instance of Blobs for container: {self.container_name}"
 
     def stored_details(self) -> list[dict[str, any]]:
+        """
+        Retrieves a list of stored details for blobs in the specified container.
+
+        This method connects to the Azure Blob Storage container and retrieves
+        metadata for all blobs within the container. Each blob's details are
+        represented as a dictionary and added to the resulting list.
+
+        Returns:
+            list[dict[str, any]]: A list of dictionaries containing metadata
+            for each blob in the container.
+        """
         res: list[dict[str, any]] = []
         for _ in self.blob_service_client.get_container_client(
             container=self.container_name
@@ -54,6 +97,26 @@ class Blobs:
     def read_manifest(
         self, path: str, export_history_id: Union[UUID | ExportHistoryModel]
     ) -> dict[str, any]:
+        """
+        Reads a manifest file from Azure Blob Storage and returns its contents as a dictionary.
+
+        Args:
+            path (str): The path to the directory containing the manifest file.
+            export_history_id (Union[UUID, ExportHistoryModel]): The export history identifier,
+                which can be either a UUID or an instance of ExportHistoryModel.
+
+        Returns:
+            dict[str, any]: A dictionary containing the contents of the manifest file,
+            with an additional key "export_history_id" representing the export history identifier.
+
+        Raises:
+            Exception: If there is an error while reading or parsing the manifest file.
+
+        Logs:
+            - Logs an error message if reading the manifest fails.
+            - Logs a debug message with details about the manifest, including run ID,
+                version, byte count, blob count, and data row count.
+        """
         client = self.blob_service_client.get_blob_client(
             container=self.container_name,
             blob=f"{path.rstrip("/")}/manifest.json",
@@ -80,27 +143,43 @@ class Blobs:
     def gather_history(self) -> ExportHistoryModel:
         raise NotImplementedError()
 
-    def aggregate_manifest_details(self) -> "Blobs":
+    def aggregate_manifest_details(
+        self,
+        start_date: datetime = datetime(2020, 1, 1, tzinfo=timezone.utc),
+        end_date: datetime = datetime.now(tz=timezone.utc),
+    ) -> "Blobs":
         """
-        Aggregates manifest details from the export history of a subscription and collects blob data.
+        Aggregates manifest details from export history blobs within a specified date range.
 
-        This method retrieves the export history blobs' paths and IDs associated with the subscription,
-        reads the manifest details for each blob, and appends the collected blob data to the `collected_blob_data` attribute.
+        This method retrieves and processes manifest details from export history blobs
+        associated with the subscription. It filters blobs based on the provided date range,
+        reads their manifest data, and appends the collected blob information to the
+        `collected_blob_data` attribute.
+
+        Args:
+            start_date (datetime, optional): The start date for filtering export history blobs.
+                If not provided, defaults to January 1, 2020, in UTC timezone.
+            end_date (datetime, optional): The end date for filtering export history blobs.
+                Defaults to the current datetime in UTC timezone.
 
         Returns:
-            Blobs: The current instance of the class with updated `collected_blob_data`.
+            Blobs: The instance of the class with updated `collected_blob_data` containing
+                the aggregated blob information.
 
         Raises:
-            KeyError: If the manifest does not contain the expected keys.
-            ValueError: If the `export_history_id` in the manifest is invalid.
+            ValueError: If any required data is missing or invalid during processing.
 
         Notes:
-            - The `read_manifest` method is expected to process each blob path and return a dictionary
-                containing the manifest details, including a list of blobs and an `export_history_id`.
+            - The method assumes that `self.subscription.exporthistory_set.subOne.exporthistory_set`
+                is a valid queryable object with a `filter` method.
+            - The `read_manifest` method is expected to return a dictionary containing
+                manifest details, including a "blobs" key with blob data.
             - The `BlobsInfo` class is used to structure the collected blob data.
         """
         export_history_blobs_path: list[tuple[str, UUID]] = list(
-            self.subscription.exporthistory_set.values_list("blobs_path", "id")
+            self.subscription.exporthistory_set.filter(
+                report_datetime_range__overlap=DateTimeTZRange(start_date, end_date)
+            ).values_list("blobs_path", "id")
         )
         manifest_details: list[dict] = []
         for manifest in export_history_blobs_path:
