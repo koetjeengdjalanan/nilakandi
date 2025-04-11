@@ -47,3 +47,5 @@ networks:
 volumes:
   Dev-nilakandi-db-data:
     driver: local
+  minio-data:
+    driver: local
