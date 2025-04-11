@@ -1,0 +1,21 @@
+<table id="item-table" class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+            <tr id="item-{{ item.id }}">
+                <td>{{ item.name }}</td>
+                <td>{{ item.description }}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#itemModal" hx-get="{% url 'htmx_update_modal' item.id %}" hx-target="#itemModal .modal-body">Edit</button>
+                    <button hx-delete="{% url 'htmx_delete' item.id %}" hx-target="#item-{{ item.id }}" hx-swap="outerHTML" hx-confirm="Are you sure?" class="btn btn-sm btn-danger" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>Delete</button>
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
