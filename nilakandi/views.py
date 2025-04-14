@@ -66,6 +66,12 @@ def subscriptions(request):
     )
 
 
+def subscriptions_detail(request, subsId):
+    subscription = get_object_or_404(SubscriptionsModel, subscription_id=subsId)
+    context = {"subscription": subscription}
+    return render(request, "base/subscriptions/subscription_details.html", context)
+
+
 def subscription_details(request, subsId):
     """Subscription Detail Page View
 

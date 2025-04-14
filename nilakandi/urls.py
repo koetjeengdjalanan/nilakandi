@@ -6,6 +6,11 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("subscription/", views.subscriptions, name="subscriptions"),
     path(
+        "subscription/detail/<uuid:subsId>/",
+        views.subscriptions_detail,
+        name="htmx_subscription_detail",
+    ),
+    path(
         "subscription/<uuid:subsId>/",
         views.subscription_details,
         name="subscription details",
