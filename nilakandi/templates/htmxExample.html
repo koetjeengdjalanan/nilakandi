@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load django_bootstrap5 %}
+
+{% block title %}
+    HTMX Page Example
+{% endblock title %}
+
+{% block content %}
+    <div class="container">
+        <h1>HTMX Example Page</h1>
+        <hr />
+
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#itemModal" hx-get="{% url 'htmx_create_modal' %}" hx-target="#itemModal .modal-body">
+            Add Item
+        </button>
+
+        <div class="modal fade" id="itemModal" tabindex="-1" aria-labelledby="itemModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="itemModalLabel">Item Form</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="htmxExample">
+            <table id="item-table" class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                        <tr id="item-{{ item.id }}">
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.description }}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#itemModal" hx-get="{% url 'htmx_update_modal' item.id %}" hx-target="#itemModal .modal-body">Edit</button>
+                                <button hx-delete="{% url 'htmx_delete' item.id %}" hx-target="#item-{{ item.id }}" hx-swap="outerHTML" hx-confirm="Are you sure?" class="btn btn-sm btn-danger" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>Delete</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('itemListChanged', function() {
+            htmx.ajax('GET', '{% url 'htmxList' %}', '#htmxExample');
+            var myModalEl = document.getElementById('itemModal')
+            var modal = bootstrap.Modal.getInstance(myModalEl)
+            modal.hide();
+        });
+    </script>
+{% endblock content %}

@@ -1,0 +1,27 @@
+<div>
+    <h3>{{ subscription.display_name }} Details</h3>
+    <p><strong>Subscription ID:</strong> {{ subscription.subscription_id }}</p>
+    <p><strong>State:</strong> {{ subscription.state }}</p>
+    <p><strong>Authorization Source:</strong> {{ subscription.authorization_source }}</p>
+    {% if subscription.subscription_policies %}
+        <h4>Subscription Policies</h4>
+        <ul>
+            {% for key, value in subscription.subscription_policies.items %}
+                <li><strong>{{ key }}:</strong> {{ value }}</li>
+            {% empty %}
+                <li>No subscription policies available.</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% if subscription.additional_properties %}
+        <h4>Additional Properties</h4>
+        <ul>
+            {% for key, value in subscription.additional_properties.items %}
+                <li><strong>{{ key }}:</strong> {{ value }}</li>
+            {% empty %}
+                <li>No additional properties available.</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    </div>

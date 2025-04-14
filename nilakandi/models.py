@@ -4,6 +4,13 @@ from django.db import models
 
 
 class Subscription(models.Model):
+    """
+    Subscription Model
+
+    This model is created to store the subscription that retrieved from the Azure API,
+    the fields are required to store or save the subscription.
+    """
+
     subscription_id = models.UUIDField(primary_key=True)
     id = models.CharField(primary_key=False, max_length=100, unique=True)
     display_name = models.CharField()
@@ -16,6 +23,13 @@ class Subscription(models.Model):
 
 
 class Services(models.Model):
+    """
+    Service Model
+
+    This model is created to store the service that retrieved from the Azure API,
+    the fields are required to store or save the service.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -39,6 +53,13 @@ class Services(models.Model):
 
 
 class Operation(models.Model):
+    """
+    Operation Model
+
+    This model is created to store the operation that retrieved from the Azure API,
+    the fields are required to store or save the operation.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField()
     type = models.CharField()
@@ -53,6 +74,13 @@ class Operation(models.Model):
 
 
 class Marketplace(models.Model):
+    """
+    Marketplace Model
+
+    This model is created to store the marketplace that retrieved from the Azure API,
+    the fields are required to store or save the marketplace.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -100,6 +128,13 @@ class Marketplace(models.Model):
 
 
 class VirtualMachine(models.Model):
+    """
+    Virtual Machine Model
+
+    This model is created to store the virtual machine details that retrieved from the Azure API,
+    the fields are required to store or save the virtual machine details.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -133,6 +168,13 @@ class VirtualMachine(models.Model):
 
 
 class VirtualMachineCost(models.Model):
+    """
+    Virtual Machine Cost Model
+
+    This model is created to store the virtual machine cost that retrieved from the Azure API,
+    the fields are required to store or save the virtual machine cost.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -159,14 +201,27 @@ class VirtualMachineCost(models.Model):
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
 
-    """
-        Constraint unique keys based on 
-    """
-
     class Meta:
+        """
+        Constraint unique keys for the VirtualMachineCost model
+        """
+
         constraints = [
             models.UniqueConstraint(
                 fields=["billing_month", "resource_id", "meter_id"],
                 name="unique_billing_resource_meter",
             )
         ]
+
+
+class HtmxTest(models.Model):
+    """
+    This model is not related with existing application flow,
+    this model was created for testing purpose
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField()
+    description = models.TextField()
+    last_edited = models.DateTimeField(auto_now=True)
+    added = models.DateTimeField(auto_now=True, editable=False)
