@@ -382,7 +382,7 @@ class Blobs:
                 or not ExportHistoryModel.objects.filter(id=export_history_id).exists()
             ):
                 raise ValueError(
-                    "ExportHistory ID must be a UUID when manifest_path is provided"
+                    f"ExportHistory ID must be a UUID when collected_blob_data is Not provided! {export_history_id=}"
                 )
             res = []
             manifests = self.read_manifest(

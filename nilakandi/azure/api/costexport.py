@@ -457,7 +457,7 @@ class ExportHistory:
         try:
             with transaction.atomic():
                 created_objs = ExportHistoryModel.objects.bulk_create(
-                    data, batch_size=500
+                    data, batch_size=500, ignore_conflicts=True
                 )
             for obj in created_objs:
                 logging.getLogger("django.db.save").debug(

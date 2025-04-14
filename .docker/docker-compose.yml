@@ -22,6 +22,22 @@ services:
       - db
       - redis
 
+  flower:
+    hostname: Dev-Nilakandi-flower
+    container_name: Dev-Nilakandi-flower
+    image: mher/flower:0.9.7
+    command: ["flower", "--broker=redis://Nilakandi-redis:6379/0", "--port=5555", "--persistent=True", "--db=/data/flower.db"]
+    volumes:
+      - flower-data:/data
+    ports:
+      - 21155:5555
+    networks:
+      - Dev-nilakandi-net
+    depends_on:
+      - redis
+    environment:
+      - FLOWER_BASIC_AUTH=admin:admin123
+
   workers:
     hostname: Nilakandi-worker
     container_name: Nilakandi-worker
@@ -30,7 +46,7 @@ services:
       dockerfile: .docker/web/Dockerfile
     restart: on-failure:5
     user: arjuna
-    command: poetry run celery -A config.settings worker --loglevel=info
+    command: poetry run celery -A config.settings worker --loglevel=info -E
     tty: true
     volumes:
       - ../.env:/app/.env:ro
@@ -70,5 +86,5 @@ networks:
 volumes:
   nilakandi-db-data:
     driver: local
-  minio-data:
+  flower-data:
     driver: local
