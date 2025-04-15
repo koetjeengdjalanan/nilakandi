@@ -515,7 +515,7 @@ class ExportReport(models.Model):
     account_owner_id = models.CharField(null=False)
     subscription_name = models.CharField(null=False)
     resource_group = models.CharField(null=True, blank=True)
-    resource_location = models.CharField(null=False)
+    resource_location = models.CharField(null=True, blank=True)
     date = models.DateField(null=False)
     product_name = models.CharField(null=False)
     meter_category = models.CharField(null=False)
@@ -590,4 +590,6 @@ class ExportReport(models.Model):
             "resource_group",
             "date",
             "meter_id",
+            "resource_group",
+            "resource_location",
         ]
