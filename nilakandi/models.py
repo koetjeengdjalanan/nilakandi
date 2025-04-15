@@ -590,6 +590,5 @@ class ExportReport(models.Model):
             "resource_group",
             "date",
             "meter_id",
-            "resource_group",
             "resource_location",
         ]
