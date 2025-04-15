@@ -584,11 +584,11 @@ class ExportReport(models.Model):
         else:
             super().__setattr__(name, value)
 
-    class Meta:
-        unique_together = [
-            "subscription_id",
-            "resource_group",
-            "date",
-            "meter_id",
-            "resource_location",
-        ]
+    # class Meta:
+    #     unique_together = [
+    #         "subscription_id",
+    #         "resource_group",
+    #         "date",
+    #         "meter_id",
+    #         "resource_location",
+    #     ]
