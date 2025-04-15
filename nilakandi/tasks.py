@@ -119,7 +119,7 @@ def grab_marketplaces(
             _.get().db_save()
         except Exception as e:
             logging.getLogger("nilakandi.pull").error(
-                f"Error in grabbing marketplaces for month {month}: {e}"
+                f"Error in grabbing marketplaces for {sub.display_name} month {month}: {e}"
             )
         finally:
             continue
