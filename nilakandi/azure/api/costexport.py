@@ -18,6 +18,7 @@ from config.django.base import (
     AZURE_STORAGE_ACCOUNT_NAME,
     AZURE_STORAGE_CONTAINER,
     DEBUG,
+    TENACITY_MAX_RETRY,
     TIME_ZONE,
 )
 from config.django.local import SKIPPABLE_HTTP_ERROR
@@ -221,7 +222,7 @@ class ExportOrCreate:
         return self
 
     @retry(
-        stop=stop_after_attempt(5),
+        stop=stop_after_attempt(TENACITY_MAX_RETRY),
         reraise=True,
         wait=wait_retry_after,
         retry=retry_if_exception(
@@ -269,7 +270,7 @@ class ExportOrCreate:
             raise
 
     @retry(
-        stop=stop_after_attempt(5),
+        stop=stop_after_attempt(TENACITY_MAX_RETRY),
         reraise=True,
         wait=wait_retry_after,
         retry=retry_if_exception(
@@ -343,7 +344,7 @@ class ExportHistory:
         self.url = f"{base_url}{self.subscription.id}/providers/Microsoft.CostManagement/exports/{export_name}/runHistory"
 
     @retry(
-        stop=stop_after_attempt(5),
+        stop=stop_after_attempt(TENACITY_MAX_RETRY),
         reraise=True,
         wait=wait_retry_after,
         retry=retry_if_exception(

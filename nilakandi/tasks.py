@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -36,22 +37,39 @@ def grab_services(
         raise NotImplementedError("skip_existing=True is not implemented yet.")
     dates = yearly_list(start_date, end_date)
     for date in dates:
-        start_date, end_date = date
-        services = (
-            Services(
-                bearer_token=bearer,
-                subscription=subscription_id,
-                start_date=start_date,
-                end_date=end_date,
+        try:
+            start_date, end_date = date
+            services = (
+                Services(
+                    bearer_token=bearer,
+                    subscription=subscription_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                .pull()
+                .db_save()
             )
-            .pull()
-            .db_save()
-        )
-        # TODO: Implement Logging
-        while services.res.next_link:
-            nextUrl = services.res.next_link
-            services.pull(uri=nextUrl).db_save()
             # TODO: Implement Logging
+            while services.res.next_link:
+                nextUrl = services.res.next_link
+                services.pull(uri=nextUrl).db_save()
+                # TODO: Implement Logging
+        except Exception as e:
+            logging.getLogger("nilakandi.pull").error(
+                f"Error in grabbing services for subscription {subscription_id}: {e}"
+            )
+        finally:
+            continue
+    return {
+        "subscription_id": subscription_id,
+        "subscription_name": SubscriptionsModel.objects.get(
+            subscription_id=subscription_id
+        ).display_name,
+        "period": (start_date, end_date),
+        "count": SubscriptionsModel.objects.get(
+            subscription_id=subscription_id
+        ).services_set.count(),
+    }
 
 
 @shared_task(name="nilakandi.tasks.grab_marketplaces")
@@ -61,7 +79,7 @@ def grab_marketplaces(
     start_date: datetime.date,
     end_date: datetime.date,
     skip_existing: bool = False,
-) -> None:
+) -> dict[str, any]:
     """Grab Marketplaces data from Azure API with the given parameters.
 
     Args:
@@ -92,11 +110,25 @@ def grab_marketplaces(
         )
     ]
     for month in month_list:
-        azi.Marketplaces(
+        _ = azi.Marketplaces(
             auth=auth,
             subscription=sub,
             date=month,
-        ).get().db_save()
+        )
+        try:
+            _.get().db_save()
+        except Exception as e:
+            logging.getLogger("nilakandi.pull").error(
+                f"Error in grabbing marketplaces for month {month}: {e}"
+            )
+        finally:
+            continue
+    return {
+        "subscription_id": sub.subscription_id,
+        "subscription_name": sub.display_name,
+        "period": (start_date, end_date),
+        "count": sub.marketplace_set.count(),
+    }
 
 
 @shared_task(name="nilakandi.tasks.cost_export")

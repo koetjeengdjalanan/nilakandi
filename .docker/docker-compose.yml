@@ -58,7 +58,7 @@ services:
   db:
     hostname: Nilakandi-db
     container_name: Nilakandi-db
-    image: postgres:13
+    image: postgres:16
     restart: always
     volumes:
       - nilakandi-db-data:/var/lib/postgresql/data

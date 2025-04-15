@@ -14,7 +14,7 @@ from tenacity import (
     stop_after_attempt,
 )
 
-from config.django.base import TIME_ZONE
+from config.django.base import TENACITY_MAX_RETRY, TIME_ZONE
 from config.django.local import SKIPPABLE_HTTP_ERROR
 from nilakandi.azure.models import ApiResult
 from nilakandi.helper.miscellaneous import wait_retry_after
@@ -124,7 +124,7 @@ class Services:
         }
 
     @retry(
-        stop=stop_after_attempt(5),
+        stop=stop_after_attempt(TENACITY_MAX_RETRY),
         reraise=True,
         wait=wait_retry_after,
         retry=retry_if_exception(
