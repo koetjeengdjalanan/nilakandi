@@ -16,35 +16,45 @@ from nilakandi.models import Subscription as SubscriptionsModel
 
 def with_sub_name(task_func):
     """
-    Decorator for task functions that appends subscription name to the task name.
+    Decorator for task functions that adds subscription name to task headers.
 
-    This decorator modifies the task name at runtime by appending the subscription's
-    display name when a subscription_id is provided in the function arguments.
-    For example, 'task_name' becomes 'task_name.subscription_display_name'.
+    This decorator adds the subscription's display name to the task's headers
+    when a subscription_id is provided in the function arguments.
+    This information can be viewed in monitoring tools like Flower.
 
     Parameters:
         task_func (callable): The task function to be decorated.
 
     Returns:
-        callable: The wrapped function that updates the task name before execution.
-
-    Example:
-        @with_sub_name
-        @app.task
-        def process_subscription_data(subscription_id, data):
-            # Task implementation
-            pass
+        callable: The wrapped function that updates task headers before execution.
     """
 
     @wraps(task_func)
     def wrapper(*args, **kwargs):
         subscription_id = kwargs.get("subscription_id")
         if subscription_id:
-            subscription = SubscriptionsModel.objects.get(
-                subscription_id=subscription_id
-            ).display_name
-            base_name = current_task.name
-            current_task.name = f"{base_name}.{subscription}"
+            try:
+                subscription = SubscriptionsModel.objects.get(
+                    subscription_id=subscription_id
+                ).display_name
+                # Add subscription info to task headers
+                if hasattr(current_task.request, "headers"):
+                    if current_task.request.headers is None:
+                        current_task.request.headers = {}
+                    current_task.request.headers["subscription"] = subscription
+
+                # Add subscription to task info for logging/tracking
+                if not hasattr(current_task.request, "subscription"):
+                    setattr(current_task.request, "subscription", subscription)
+
+                # Log the subscription being processed
+                logging.getLogger("nilakandi.tasks").info(
+                    f"Processing {current_task.name} for subscription: {subscription}"
+                )
+            except Exception as e:
+                logging.getLogger("nilakandi.tasks").error(
+                    f"Error adding subscription info to task: {e}"
+                )
         return task_func(*args, **kwargs)
 
     return wrapper

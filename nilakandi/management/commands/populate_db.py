@@ -104,7 +104,7 @@ class Command(BaseCommand):
             )
             chain(
                 grab_cost_export_history.s(bearer=auth.token.token, subscription_id=id),
-                grab_blobs.s(
+                grab_blobs.si(
                     creds={
                         "client_id": settings.AZURE_CLIENT_ID,
                         "client_secret": settings.AZURE_CLIENT_SECRET,
