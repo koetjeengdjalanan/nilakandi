@@ -98,6 +98,7 @@ class ExportOrCreate:
             "Authorization": f"Bearer {bearer_token}",
             "Content-Type": "application/json",
             "ClientType": "Nilakandi-NTT",
+            "Connection": "keep-alive",
             "x-ms-command-name": "Nilakandi-CostExport",
         }
         self.payload_config()
@@ -334,6 +335,7 @@ class ExportHistory:
             "Authorization": f"Bearer {bearer_token}",
             "Content-Type": "application/json",
             "ClientType": "Nilakandi-NTT",
+            "Connection": "keep-alive",
             "x-ms-command-name": "Nilakandi-CostExport",
         }
         self.subscription: SubscriptionsModel = (

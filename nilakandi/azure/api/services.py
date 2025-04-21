@@ -97,6 +97,7 @@ class Services:
             "Authorization": f"Bearer {bearer_token}",
             "Content-Type": "application/json",
             "ClientType": "Nilakandi-NTT",
+            "Connection": "keep-alive",
             "x-ms-command-name": "Nilakandi-CostAnalysis",
         }
         self.payload: dict[str, str | dict] = {
@@ -155,6 +156,7 @@ class Services:
             params=self.params if (uri is None) else None,
             headers=self.headers,
             json=self.payload,
+            timeout=(30, 300),
         )
         reqRes.raise_for_status()
         res = reqRes.json().copy()

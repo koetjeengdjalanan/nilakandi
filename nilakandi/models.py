@@ -557,7 +557,7 @@ class ExportReport(models.Model):
     billing_profile_name = models.CharField(null=False)
     invoice_section_id = models.BigIntegerField(null=False)
     is_azure_credit_eligible = models.BooleanField(null=False)
-    part_number = models.CharField(null=False)
+    part_number = models.CharField(null=True, blank=True)
     pay_g_price = models.FloatField(null=False)
     plan_name = models.CharField(null=True, blank=True)
     service_family = models.CharField(null=False)

@@ -10,6 +10,7 @@ SKIPPABLE_HTTP_ERROR: list[int] = [
     409,  # Conflict
     500,  # Internal Server Error
     501,  # Not Implemented
+    504,  # Gateway Timeout
 ]
 EARLIEST_DATA: str = (
     env("EARLIEST_DATA", default="20200101") if not DEBUG else "20250101"  # noqa: F405
