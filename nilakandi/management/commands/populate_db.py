@@ -4,6 +4,7 @@ from datetime import datetime as dt
 from time import sleep
 from zoneinfo import ZoneInfo
 
+from celery import chain
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -101,16 +102,18 @@ class Command(BaseCommand):
                 start_date=start_date,
                 end_date=end_date,
             )
-            grab_cost_export_history.delay(bearer=auth.token.token, subscription_id=id)
-            grab_blobs.delay(
-                creds={
-                    "client_id": settings.AZURE_CLIENT_ID,
-                    "client_secret": settings.AZURE_CLIENT_SECRET,
-                    "tenant_id": settings.AZURE_TENANT_ID,
-                },
-                subscription_id=id,
-                start_date=start_date,
-                end_date=end_date,
-            )
+            chain(
+                grab_cost_export_history.s(bearer=auth.token.token, subscription_id=id),
+                grab_blobs.s(
+                    creds={
+                        "client_id": settings.AZURE_CLIENT_ID,
+                        "client_secret": settings.AZURE_CLIENT_SECRET,
+                        "tenant_id": settings.AZURE_TENANT_ID,
+                    },
+                    subscription_id=id,
+                    start_date=start_date,
+                    end_date=end_date,
+                ),
+            ).delay()
             sleep(options["delay"])
         logging.getLogger("django").info("Task has been queued")

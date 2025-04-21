@@ -1,8 +1,9 @@
 import logging
 from datetime import datetime
+from functools import wraps
 from uuid import UUID
 
-from celery import shared_task
+from celery import current_task, shared_task
 from dateutil.relativedelta import relativedelta
 
 from nilakandi.azure.api.costexport import ExportHistory, ExportOrCreate
@@ -13,7 +14,44 @@ from nilakandi.helper.miscellaneous import yearly_list
 from nilakandi.models import Subscription as SubscriptionsModel
 
 
+def with_sub_name(task_func):
+    """
+    Decorator for task functions that appends subscription name to the task name.
+
+    This decorator modifies the task name at runtime by appending the subscription's
+    display name when a subscription_id is provided in the function arguments.
+    For example, 'task_name' becomes 'task_name.subscription_display_name'.
+
+    Parameters:
+        task_func (callable): The task function to be decorated.
+
+    Returns:
+        callable: The wrapped function that updates the task name before execution.
+
+    Example:
+        @with_sub_name
+        @app.task
+        def process_subscription_data(subscription_id, data):
+            # Task implementation
+            pass
+    """
+
+    @wraps(task_func)
+    def wrapper(*args, **kwargs):
+        subscription_id = kwargs.get("subscription_id")
+        if subscription_id:
+            subscription = SubscriptionsModel.objects.get(
+                subscription_id=subscription_id
+            ).display_name
+            base_name = current_task.name
+            current_task.name = f"{base_name}.{subscription}"
+        return task_func(*args, **kwargs)
+
+    return wrapper
+
+
 @shared_task(name="nilakandi.tasks.grab_services")
+@with_sub_name
 def grab_services(
     bearer: str,
     subscription_id: UUID,
@@ -73,6 +111,7 @@ def grab_services(
 
 
 @shared_task(name="nilakandi.tasks.grab_marketplaces")
+@with_sub_name
 def grab_marketplaces(
     creds: dict[str, str],
     subscription_id: UUID,
@@ -132,6 +171,7 @@ def grab_marketplaces(
 
 
 @shared_task(name="nilakandi.tasks.cost_export")
+@with_sub_name
 def export_costs_to_blob(
     bearer: str,
     subscription_id: UUID,
@@ -176,6 +216,7 @@ def export_costs_to_blob(
 
 
 @shared_task(name="nilakandi.tasks.grab_cost_export_history")
+@with_sub_name
 def grab_cost_export_history(
     bearer: str,
     subscription_id: UUID,
@@ -202,6 +243,7 @@ def grab_cost_export_history(
 
 
 @shared_task(name="nilakandi.tasks.grab_blobs")
+@with_sub_name
 def grab_blobs(
     creds: dict[str, str],
     subscription_id: UUID,
