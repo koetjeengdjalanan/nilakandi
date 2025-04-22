@@ -523,7 +523,7 @@ class ExportReport(models.Model):
     meter_id = models.CharField(blank=True, null=True)
     meter_name = models.CharField(null=False)
     meter_region = models.CharField(null=True, blank=True)
-    unit_of_measure = models.CharField(null=False)
+    unit_of_measure = models.CharField(null=True, blank=True)
     quantity = models.FloatField(null=False)
     effective_price = models.FloatField(null=False)
     cost_in_billing_currency = models.FloatField(null=False)

@@ -235,7 +235,7 @@ class Blobs:
 
             # Log progress
             logging.getLogger("nilakandi.db").info(
-                f"Imported {records_imported} records from {blob_info.blob_name}"
+                f"Imported {records_imported} records {self.subscription.display_name} from {blob_info.blob_name}"
             )
 
         return self
@@ -253,11 +253,15 @@ class Blobs:
         Yields:
             Iterator[pd.DataFrame]: Chunks of the CSV file as pandas DataFrames
         """
-        # Download the blob and stream it to pandas
-        stream = io.StringIO(blob_client.download_blob().readall().decode("utf-8"))
+        res = io.StringIO()
+        stream = blob_client.download_blob(encoding="UTF-8", max_concurrency=2)
+        for chunk in stream.chunks():
+            res.write(chunk.decode("utf-8"))
+
+        res.seek(0)
 
         # Read the CSV in chunks
-        for chunk in pd.read_csv(stream, chunksize=chunk_size):
+        for chunk in pd.read_csv(res, chunksize=chunk_size, low_memory=False):
             yield chunk
 
     def _process_chunk(

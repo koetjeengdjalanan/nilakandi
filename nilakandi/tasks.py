@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 
 from nilakandi.azure.api.costexport import ExportHistory, ExportOrCreate
 from nilakandi.azure.api.services import Services
+from nilakandi.azure.models import BlobsInfo
 from nilakandi.helper import azure_api as azi
 from nilakandi.helper.azure_blob import Blobs
 from nilakandi.helper.miscellaneous import yearly_list
@@ -259,22 +260,47 @@ def grab_blobs(
     subscription_id: UUID,
     start_date: datetime,
     end_date: datetime,
-) -> int:
+) -> dict[str, any]:
     auth = azi.Auth(
         client_id=creds["client_id"],
         tenant_id=creds["tenant_id"],
         client_secret=creds["client_secret"],
     )
-    blobs: Blobs = (
-        Blobs(
-            container_name="testcontainer",
-            auth=auth,
-            subscription=subscription_id,
-        )
-        .aggregate_manifest_details(
-            start_date=start_date,
-            end_date=end_date,
-        )
-        .import_blobs_from_manifest()
+    blobs: Blobs = Blobs(
+        container_name="testcontainer",
+        auth=auth,
+        subscription=subscription_id,
+    ).aggregate_manifest_details(
+        start_date=start_date,
+        end_date=end_date,
     )
+    tasks_id: list[UUID] = []
+    for blob in blobs.collected_blob_data:
+        task = process_blob.delay(
+            creds=creds,
+            subscription_id=subscription_id,
+            blob_info=blob,
+        )
+        tasks_id.append(task.id)
+    return {
+        "subscription": blobs.subscription.display_name,
+        "total_blobs": len(blobs.collected_blob_data),
+        "tasks_id": tasks_id,
+    }
+
+
+@shared_task(name="nilakandi.tasks.process_blob")
+@with_sub_name
+def process_blob(
+    creds: dict[str, str],
+    subscription_id: UUID,
+    blob_info: BlobsInfo,
+) -> dict[str, any]:
+    blobs = Blobs(
+        container_name="testcontainer",
+        auth=creds,
+        subscription=subscription_id,
+    )
+    blobs.collected_blob_data = [blob_info]
+    blobs.import_blobs_from_manifest()
     return blobs.total_imported
