@@ -296,9 +296,14 @@ def process_blob(
     subscription_id: UUID,
     blob_info: dict,
 ) -> dict[str, any]:
+    auth = azi.Auth(
+        client_id=creds["client_id"],
+        tenant_id=creds["tenant_id"],
+        client_secret=creds["client_secret"],
+    )
     blobs = Blobs(
         container_name="testcontainer",
-        auth=creds,
+        auth=auth,
         subscription=subscription_id,
     )
     blobs.collected_blob_data = [BlobsInfo(**blob_info)]
