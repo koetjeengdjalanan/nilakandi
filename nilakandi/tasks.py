@@ -279,7 +279,7 @@ def grab_blobs(
         task = process_blob.delay(
             creds=creds,
             subscription_id=subscription_id,
-            blob_info=blob,
+            blob_info=blob.model_dump(),
         )
         tasks_id.append(task.id)
     return {
@@ -294,13 +294,13 @@ def grab_blobs(
 def process_blob(
     creds: dict[str, str],
     subscription_id: UUID,
-    blob_info: BlobsInfo,
+    blob_info: dict,
 ) -> dict[str, any]:
     blobs = Blobs(
         container_name="testcontainer",
         auth=creds,
         subscription=subscription_id,
     )
-    blobs.collected_blob_data = [blob_info]
+    blobs.collected_blob_data = [BlobsInfo(**blob_info)]
     blobs.import_blobs_from_manifest()
     return blobs.total_imported
