@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import include, path
+
 from . import views
 
 urlpatterns = [
@@ -11,4 +12,24 @@ urlpatterns = [
     ),
     path("services/", views.services, name="services"),
     path("testAPI/", views.testAPI, name="testAPI"),
+    path(
+        "reports/",
+        include(
+            [
+                path("", views.reports, name="reports"),
+                path("summary/", views.summary, name="summary"),
+                path("services/", views.services_report, name="services report"),
+                path(
+                    "marketplaces/",
+                    views.marketplaces_report,
+                    name="marketplaces report",
+                ),
+                path(
+                    "virtualmachines/",
+                    views.virtualmachines_report,
+                    name="virtualmachines report",
+                ),
+            ]
+        ),
+    ),
 ]

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="description" content="Azure Report Automation">
+    <title>
+      {% block title %}
+        {% if page_title %}
+          {{ page_title }}
+        {% else %}
+          Report Automation
+        {% endif %}
+      {% endblock title %}
+    </title>
+    {% load django_bootstrap5 %}
+    {% bootstrap_css %}
+    {% bootstrap_javascript %}
+  </head>
+  <body>{{ pivot | safe }}</body>
+  <style>
+    th {
+      white-space: nowrap;
+    }
+    td {
+      text-align: right;
+    }
+  </style>
+</html>

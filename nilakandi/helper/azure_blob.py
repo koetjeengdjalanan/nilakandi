@@ -1,6 +1,6 @@
-import io
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, Optional, Union
 from uuid import UUID
@@ -8,6 +8,7 @@ from uuid import UUID
 import pandas as pd
 from azure.storage.blob import BlobClient, BlobServiceClient, ExponentialRetry
 from caseutil import to_snake
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from numpy import nan
@@ -253,15 +254,46 @@ class Blobs:
         Yields:
             Iterator[pd.DataFrame]: Chunks of the CSV file as pandas DataFrames
         """
-        res = io.StringIO()
-        stream = blob_client.download_blob(encoding="UTF-8", max_concurrency=2)
-        for chunk in stream.chunks():
-            res.write(chunk.decode("utf-8"))
+        from hashlib import md5
 
-        res.seek(0)
+        props = blob_client.get_blob_properties()
+        if props.size == 0:
+            logging.getLogger("nilakandi.pull").error(
+                f"Blob {blob_client.blob_name} is empty"
+            )
+            raise ValueError(f"Blob {blob_client.blob_name} is empty")
+        source_md5 = props.content_settings.content_md5
 
-        # Read the CSV in chunks
-        for chunk in pd.read_csv(res, chunksize=chunk_size, low_memory=False):
+        hashser = md5()
+        report_downloads_dir = os.path.join(
+            os.getcwd(), settings.AZURE_REPORT_DOWNLOAD_DIR
+        )
+        os.makedirs(report_downloads_dir, exist_ok=True)
+        file_name = os.path.basename(blob_client.blob_name)
+        file_path = os.path.join(report_downloads_dir, file_name)
+        with open(file_path, "wb") as report_file:
+            stream = blob_client.download_blob(max_concurrency=2)
+            for chunk in stream.chunks():
+                hashser.update(chunk)
+                report_file.write(chunk)
+        # res = io.StringIO()
+        # stream = blob_client.download_blob(encoding="UTF-8", max_concurrency=2)
+        # for chunk in stream.chunks():
+        #     hashser.update(chunk)
+        #     res.write(chunk.decode("utf-8"))
+
+        downloaded_md5 = hashser.digest()
+        if downloaded_md5 != source_md5:
+            os.remove(file_path)
+            logging.getLogger("nilakandi.pull").error(
+                f"MD5 mismatch for blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}"
+            )
+            raise ValueError(
+                f"MD5 mismatch for blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}"
+            )
+
+        # res.seek(0)
+        for chunk in pd.read_csv(file_path, chunksize=chunk_size, low_memory=False):
             yield chunk
 
     def _process_chunk(

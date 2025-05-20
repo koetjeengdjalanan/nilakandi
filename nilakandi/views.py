@@ -2,18 +2,20 @@ from django.conf import settings
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_http_methods
 
 from nilakandi.models import Marketplace as MarketplacesModel
 from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
 
 from .helper.azure_api import Auth, Services, Subscriptions
+from .helper.miscellaneous import df_tohtml
 from .helper.serve_data import SubsData
-
-# Create your views here.
 
 
 def home(request):
+    from nilakandi.forms import ReportForm
+
     print(request.user)
     data = {
         "user": "Admin",
@@ -27,7 +29,7 @@ def home(request):
             for sub in SubscriptionsModel.objects.all()
         ],
         "lastAdded": MarketplacesModel.objects.order_by("-added").first(),
-        # .added.strftime("%Y-%m-%d %H:%M:%S"),
+        "form": ReportForm(),
     }
     return render(request=request, template_name="home.html", context=data)
 
@@ -43,15 +45,6 @@ def subscriptions(request):
 
 
 def subscription_details(request, subsId):
-    def toHtml(data) -> str:
-        if data.empty:
-            return "<pre>No Data</pre>"
-        return data.to_html(
-            classes="table table-striped",
-            float_format=lambda x: f"{x:,.16f}".rstrip("0").rstrip("."),
-            na_rep="n/a",
-        )
-
     try:
         sub = SubscriptionsModel.objects.get(subscription_id=subsId)
     except SubscriptionsModel.DoesNotExist:
@@ -61,8 +54,8 @@ def subscription_details(request, subsId):
     data = {
         "subsName": sub.display_name,
         "pivotTable": {
-            "Services": toHtml(serveData.service()),
-            "Marketplaces": toHtml(serveData.marketplace()),
+            "Services": df_tohtml(serveData.service()),
+            "Marketplaces": df_tohtml(serveData.marketplace()),
         },
     }
     return render(request=request, template_name="subsreport.html", context=data)
@@ -95,12 +88,122 @@ def getSubcriptions(request):
 
 
 def testAPI(request):
-    subs = SubscriptionsModel.objects.all()
-    print(subs.values())
-    return JsonResponse({"data": [sub.display_name for sub in subs]}, safe=False)
+    print(request)
+    return JsonResponse({"data": "ok", "req": request.POST})
 
 
 def marketplace(request):
     subs = SubscriptionsModel.objects.all()
     for sub in subs:
         sub.objects.marketplace
+
+
+@require_http_methods(["POST"])
+def reports(request):
+    from datetime import datetime
+
+    from nilakandi.helper.report_generation import marketplaces as marketplacesReport
+    from nilakandi.helper.report_generation import services as servicesReport
+    from nilakandi.helper.report_generation import summary as summaryReport
+    from nilakandi.helper.report_generation import (
+        virtual_machine as virtualmachinesReport,
+    )
+
+    decimal_count = request.POST.get("decimal_count", 8)
+    start_date = datetime.strptime(request.POST.get("from_date"), "%Y-%m-%d").date()
+    end_date = datetime.strptime(request.POST.get("to_date"), "%Y-%m-%d").date()
+    subscription = SubscriptionsModel.objects.get(
+        subscription_id=request.POST.get("subscription")
+    )
+    data = {}
+    match request.POST.get("report_type"):
+        case "summary":
+            page_title = "Summary Report"
+            pivot = df_tohtml(
+                df=summaryReport(start_date, end_date),
+                decimal=decimal_count,
+            )
+        case "services":
+            page_title = f"{subscription.display_name} - Services Report"
+            pivot = df_tohtml(
+                df=servicesReport(
+                    subscription=subscription, start_date=start_date, end_date=end_date
+                ),
+                decimal=decimal_count,
+            )
+        case "marketplaces":
+            page_title = f"{subscription.display_name} - Marketplaces Report"
+            pivot = df_tohtml(
+                marketplacesReport(
+                    subscription=subscription, start_date=start_date, end_date=end_date
+                ),
+                decimal=decimal_count,
+            )
+        case "virtualmachines":
+            page_title = f"{subscription.display_name} - Virtual Machines Report"
+            pivot = df_tohtml(
+                virtualmachinesReport(
+                    subscription=subscription, start_date=start_date, end_date=end_date
+                ),
+                decimal=decimal_count,
+            )
+        case _:
+            return redirect("home")
+    data["pivot"] = pivot
+    data["page_title"] = page_title
+    return render(request, "blank.html", context=data)
+
+
+def summary(request):
+    from nilakandi.helper.report_generation import summary as summaryReport
+
+    print(type(request))
+    print(request)
+    decimal_count = 0
+    if request.method == "POST":
+        decimal_count = int(request.POST.get("decimal_count", 8))
+    data = {
+        "pivot": df_tohtml(
+            df=summaryReport(), decimal=decimal_count if decimal_count else 16
+        ),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def services_report(request):
+    from nilakandi.helper.report_generation import services as servicesReport
+
+    data = {
+        "pivot": df_tohtml(servicesReport()),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def marketplaces_report(request):
+    from nilakandi.helper.report_generation import marketplaces as marketplacesReport
+
+    data = {
+        "pivot": df_tohtml(marketplacesReport()),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def virtualmachines_report(request):
+    from nilakandi.helper.report_generation import (
+        virtual_machine as virtualmachinesReport,
+    )
+
+    data = {
+        "pivot": df_tohtml(virtualmachinesReport()),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def testForms(request):
+    from nilakandi.forms import ReportForm
+
+    form = ReportForm()
+    data = {
+        "form": form,
+    }
+    return render(request, "testform.html", context=data)
