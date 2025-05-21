@@ -10,6 +10,9 @@ staticfiles
 
 # Environment variables:
 .env
+.env.local
+.env.development
+.env.test
 
 # Django migrations:
 */migrations/*
@@ -142,3 +145,5 @@ dmypy.json
 # Dev Related
 
 debug*
+devAssets/
+devAssets/*

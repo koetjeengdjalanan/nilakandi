@@ -26,7 +26,7 @@ SECRET_KEY = env(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env("DEBUG", default=True)
+DEBUG: bool = env("DEBUG", default=True)
 
 ALLOWED_HOSTS = ["*"]
 
@@ -132,13 +132,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/blobs/"
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, env("AZURE_REPORT_DOWNLOAD_DIR", default="azure-reports")),
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+TENACITY_MAX_RETRY: int = env("TENACITY_MAX_RETRY", default=10)
+
 from config.settings.azure import *  # noqa: E402, F403
 from config.settings.celery import *  # noqa: E402, F403
+from config.settings.logging import *  # noqa: E402, F403
 from config.settings.redis import *  # noqa: E402, F403
