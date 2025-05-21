@@ -266,7 +266,7 @@ class ExportOrCreate:
         except requests.HTTPError as e:
             if e.response.status_code == 404:
                 logging.getLogger("nilakandi.pull").error(
-                    f"Data not found for {self.subscription} (HTTP 404)"
+                    f"Data not found for {self.subscription} (HTTP 404)", exc_info=True
                 )
             raise
 
@@ -299,7 +299,7 @@ class ExportOrCreate:
         except requests.HTTPError as e:
             if e.response.status_code == 404:
                 logging.getLogger("nilakandi.pull").error(
-                    f"Data not found for {self.subscription} (HTTP 404)"
+                    f"Data not found for {self.subscription} (HTTP 404)", exc_info=True
                 )
             raise
 
@@ -385,7 +385,7 @@ class ExportHistory:
         except requests.HTTPError as e:
             if e.response.status_code == 404:
                 logging.getLogger("nilakandi.pull").error(
-                    f"Data not found for {self.subscription} (HTTP 404)"
+                    f"Data not found for {self.subscription} (HTTP 404)", exc_info=True
                 )
             raise
 
@@ -470,6 +470,8 @@ class ExportHistory:
                 f"Total records inserted: {len(created_objs)}"
             )
         except Exception as e:
-            logging.getLogger("django.db.save").error(f"Failed to save data: {e}")
+            logging.getLogger("django.db.save").error(
+                f"Failed to save data: {e}", exc_info=True
+            )
             raise
         return self

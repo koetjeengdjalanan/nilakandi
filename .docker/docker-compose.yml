@@ -46,7 +46,7 @@ services:
       dockerfile: .docker/web/Dockerfile
     restart: on-failure:5
     user: arjuna
-    command: poetry run celery -A config.settings worker --loglevel=info -E --pool=gevent --autoscale=200,25
+    command: poetry run celery -A config.settings worker --loglevel=info -E --pool=gevent --autoscale=80,6
     tty: true
     volumes:
       - ../.env:/app/.env:ro

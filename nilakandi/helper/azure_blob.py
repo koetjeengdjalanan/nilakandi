@@ -128,7 +128,7 @@ class Blobs:
             )
         except Exception as e:
             logging.getLogger("nilakandi.pull").error(
-                f"Error reading manifest from {path}: {e}"
+                f"Error reading manifest from {path}: {e}", exc_info=True
             )
             raise
         res["export_history_id"] = (
@@ -229,7 +229,7 @@ class Blobs:
             )
 
         # Stream the blob directly to pandas using chunks
-        for chunk in self._read_csv_in_chunks(blob_client, chunk_size):
+        for chunk in self._read_csv_in_chunks(blob_client, chunk_size, blob_info):
             records = self._process_chunk(chunk, export_history)
             records_imported = self._bulk_import_records(records)
             self.total_imported += records_imported
@@ -242,7 +242,7 @@ class Blobs:
         return self
 
     def _read_csv_in_chunks(
-        self, blob_client: BlobClient, chunk_size: int
+        self, blob_client: BlobClient, chunk_size: int, blob_info: BlobsInfo
     ) -> Iterator[pd.DataFrame]:
         """
         Streams a CSV file from Azure Blob Storage and yields chunks as pandas DataFrames.
@@ -256,17 +256,22 @@ class Blobs:
         """
         from hashlib import md5
 
+        from caseutil import to_snake
+
         props = blob_client.get_blob_properties()
         if props.size == 0:
             logging.getLogger("nilakandi.pull").error(
-                f"Blob {blob_client.blob_name} is empty"
+                f"Blob {blob_client.blob_name} is empty", exc_info=True
             )
             raise ValueError(f"Blob {blob_client.blob_name} is empty")
         source_md5 = props.content_settings.content_md5
 
-        hashser = md5()
+        hasher = md5()
         report_downloads_dir = os.path.join(
-            os.getcwd(), settings.AZURE_REPORT_DOWNLOAD_DIR
+            os.getcwd(),
+            settings.AZURE_REPORT_DOWNLOAD_DIR,
+            f"{to_snake(self.subscription.display_name)}",
+            f"{blob_info.blob_name}",
         )
         os.makedirs(report_downloads_dir, exist_ok=True)
         file_name = os.path.basename(blob_client.blob_name)
@@ -274,7 +279,7 @@ class Blobs:
         with open(file_path, "wb") as report_file:
             stream = blob_client.download_blob(max_concurrency=2)
             for chunk in stream.chunks():
-                hashser.update(chunk)
+                hasher.update(chunk)
                 report_file.write(chunk)
         # res = io.StringIO()
         # stream = blob_client.download_blob(encoding="UTF-8", max_concurrency=2)
@@ -282,11 +287,12 @@ class Blobs:
         #     hashser.update(chunk)
         #     res.write(chunk.decode("utf-8"))
 
-        downloaded_md5 = hashser.digest()
+        downloaded_md5 = hasher.digest()
         if downloaded_md5 != source_md5:
             os.remove(file_path)
             logging.getLogger("nilakandi.pull").error(
-                f"MD5 mismatch for blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}"
+                f"MD5 mismatch for blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}",
+                exc_info=True,
             )
             raise ValueError(
                 f"MD5 mismatch for blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}"
@@ -425,8 +431,8 @@ class Blobs:
                 path=manifest_path, export_history_id=export_history_id
             ).get("blobs", [])
             if not manifests:
-                error_msg = f"No blobs found in manifest {manifest_path}: {manifests}"
-                logging.getLogger("nilakandi.pull").error(error_msg)
+                error_msg = f"{self.subscription} No blobs found in manifest {manifest_path}: {manifests}"
+                logging.getLogger("nilakandi.pull").error(error_msg, exc_info=True)
                 raise ValueError(error_msg)
             for _ in manifests:
                 res.append(BlobsInfo(exportHistoryId=export_history_id, **_))
@@ -459,5 +465,6 @@ class Blobs:
                     logging.getLogger("nilakandi.db").error(
                         f"Error for {self.subscription} importing {'/'.join(blob_info.blob_name.split('/'))}: {str(e)}"
                     )
+                    raise
 
         return self

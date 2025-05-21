@@ -54,7 +54,7 @@ def with_sub_name(task_func):
                 )
             except Exception as e:
                 logging.getLogger("nilakandi.tasks").error(
-                    f"Error adding subscription info to task: {e}"
+                    f"Error adding subscription info to task: {e}", exc_info=True
                 )
         return task_func(*args, **kwargs)
 
@@ -105,7 +105,8 @@ def grab_services(
                 # TODO: Implement Logging
         except Exception as e:
             logging.getLogger("nilakandi.pull").error(
-                f"Error in grabbing services for subscription {subscription_id}: {e}"
+                f"Error in grabbing services for subscription {subscription_id}: {e}",
+                exc_info=True,
             )
         finally:
             continue
@@ -169,7 +170,8 @@ def grab_marketplaces(
             _.get().db_save()
         except Exception as e:
             logging.getLogger("nilakandi.pull").error(
-                f"Error in grabbing marketplaces for {sub.display_name} month {month}: {e}"
+                f"Error in grabbing marketplaces for {sub.display_name} month {month}: {e}",
+                exc_info=True,
             )
         finally:
             continue
