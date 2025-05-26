@@ -277,10 +277,10 @@ class Blobs:
         file_name = os.path.basename(blob_client.blob_name)
         file_path = os.path.join(report_downloads_dir, file_name)
         with open(file_path, "wb") as report_file:
-            stream = blob_client.download_blob(max_concurrency=2)
-            for chunk in stream.chunks():
-                hasher.update(chunk)
-                report_file.write(chunk)
+            download_stream = blob_client.download_blob()
+            data = download_stream.readall()
+            hasher.update(data)
+            report_file.write(data)
         # res = io.StringIO()
         # stream = blob_client.download_blob(encoding="UTF-8", max_concurrency=2)
         # for chunk in stream.chunks():
@@ -319,14 +319,12 @@ class Blobs:
         chunk.columns = [to_snake(col) for col in chunk.columns]
         for col in [
             "date",
-            "service_info_1",
-            "service_info_2",
             "billing_period_start_date",
             "billing_period_end_date",
         ]:
             if col in chunk.columns:
                 chunk[col] = pd.to_datetime(
-                    chunk[col], errors="coerce", utc=True
+                    chunk[col], dayfirst=True, errors="coerce", utc=True
                 ).dt.strftime("%Y-%m-%d")
 
         chunk.replace({nan: None, "": None}, inplace=True)

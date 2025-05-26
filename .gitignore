@@ -19,6 +19,7 @@ staticfiles
 
 # VS Code settings:
 .vscode/
+*/instructions/
 
 # Byte-compiled / optimized / DLL files
 *.py[cod]
