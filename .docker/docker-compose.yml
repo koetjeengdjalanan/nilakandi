@@ -16,6 +16,7 @@ services:
       - "21180:21180"
     volumes:
       - ../.env:/app/.env:ro
+      - azure-reports:/app/azure-reports
     networks:
       - nilakandi-net
     depends_on:
@@ -50,6 +51,7 @@ services:
     tty: true
     volumes:
       - ../.env:/app/.env:ro
+      - azure-reports:/app/azure-reports
     networks:
       - nilakandi-net
     depends_on:
@@ -87,4 +89,6 @@ volumes:
   nilakandi-db-data:
     driver: local
   flower-data:
+    driver: local
+  azure-reports:
     driver: local

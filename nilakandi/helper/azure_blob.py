@@ -2,10 +2,12 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from time import sleep
 from typing import Any, Dict, Iterator, Optional, Union
 from uuid import UUID
 
 import pandas as pd
+from azure.core.exceptions import HttpResponseError
 from azure.storage.blob import BlobClient, BlobServiceClient, ExponentialRetry
 from caseutil import to_snake
 from django.conf import settings
@@ -277,15 +279,28 @@ class Blobs:
         file_name = os.path.basename(blob_client.blob_name)
         file_path = os.path.join(report_downloads_dir, file_name)
         with open(file_path, "wb") as report_file:
-            download_stream = blob_client.download_blob()
-            data = download_stream.readall()
-            hasher.update(data)
-            report_file.write(data)
-        # res = io.StringIO()
-        # stream = blob_client.download_blob(encoding="UTF-8", max_concurrency=2)
-        # for chunk in stream.chunks():
-        #     hashser.update(chunk)
-        #     res.write(chunk.decode("utf-8"))
+            # download with retry and stream in chunks to avoid IncompleteRead
+            max_attempts = 5
+            backoff = 1
+            for attempt in range(max_attempts):
+                try:
+                    download_stream = blob_client.download_blob()
+                    break
+                except HttpResponseError:
+                    if attempt < max_attempts - 1:
+                        sleep(backoff)
+                        backoff *= 2
+                        continue
+                    logging.getLogger("nilakandi.pull").error(
+                        f"Failed downloading blob {blob_client.blob_name} after {max_attempts} attempts",
+                        exc_info=True,
+                    )
+                    raise
+
+            # write data in streaming chunks
+            for chunk_bytes in download_stream.chunks():
+                hasher.update(chunk_bytes)
+                report_file.write(chunk_bytes)
 
         downloaded_md5 = hasher.digest()
         if downloaded_md5 != source_md5:
