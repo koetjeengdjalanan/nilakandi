@@ -92,3 +92,7 @@ volumes:
     driver: local
   azure-reports:
     driver: local
+    driver_opts:
+      type: none
+      device: /mnt/mydisk/azure-reports
+      o: bind,rw

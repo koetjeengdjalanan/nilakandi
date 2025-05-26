@@ -81,7 +81,7 @@ class Command(BaseCommand):
             sys.exit(2)
 
         sys.stdout.write(
-            f"{Subscription.objects.count()=} {", ".join(list(Subscription.objects.values_list('display_name', flat=True)))}\n"
+            f"{Subscription.objects.count()=} {', '.join(Subscription.objects.values_list('display_name', flat=True))}\n"
         )
         for id in subs_id_list:
             sub: str = Subscription.objects.get(subscription_id=id).display_name
