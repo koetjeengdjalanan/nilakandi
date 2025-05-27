@@ -16,6 +16,7 @@ from django.db import transaction
 from numpy import nan
 from psycopg2.extras import DateTimeTZRange
 
+from config.django.base import TENACITY_MAX_RETRY
 from nilakandi.azure.models import BlobsInfo
 from nilakandi.helper.azure_api import Auth
 from nilakandi.models import ExportHistory as ExportHistoryModel
@@ -258,8 +259,6 @@ class Blobs:
         """
         from hashlib import md5
 
-        from caseutil import to_snake
-
         props = blob_client.get_blob_properties()
         if props.size == 0:
             logging.getLogger("nilakandi.pull").error(
@@ -272,45 +271,50 @@ class Blobs:
         report_downloads_dir = os.path.join(
             os.getcwd(),
             settings.AZURE_REPORT_DOWNLOAD_DIR,
-            f"{to_snake(self.subscription.display_name)}",
+            # f"{to_snake(self.subscription.display_name)}",
             f"{blob_info.blob_name}",
         )
         os.makedirs(report_downloads_dir, exist_ok=True)
         file_name = os.path.basename(blob_client.blob_name)
         file_path = os.path.join(report_downloads_dir, file_name)
         with open(file_path, "wb") as report_file:
-            # download with retry and stream in chunks to avoid IncompleteRead
-            max_attempts = 5
+            # Manual ranged download in small blocks to mitigate timeouts
+            block_size = 4 * 1024 * 1024  # 4MB blocks
+            total_size = props.size
+            offset = 0
+            max_attempts = TENACITY_MAX_RETRY
             backoff = 1
-            for attempt in range(max_attempts):
-                try:
-                    download_stream = blob_client.download_blob()
-                    break
-                except HttpResponseError:
-                    if attempt < max_attempts - 1:
-                        sleep(backoff)
-                        backoff *= 2
-                        continue
-                    logging.getLogger("nilakandi.pull").error(
-                        f"Failed downloading blob {blob_client.blob_name} after {max_attempts} attempts",
-                        exc_info=True,
-                    )
-                    raise
-
-            # write data in streaming chunks
-            for chunk_bytes in download_stream.chunks():
+            while offset < total_size:
+                length = min(block_size, total_size - offset)
+                for attempt in range(max_attempts):
+                    try:
+                        chunk_bytes = blob_client.download_blob(
+                            offset=offset, length=length
+                        ).readall()
+                        break
+                    except HttpResponseError:
+                        if attempt < max_attempts - 1:
+                            sleep(backoff)
+                            backoff *= 2
+                            continue
+                        logging.getLogger("nilakandi.pull").error(
+                            f"Failed downloading {self.subscription.display_name} blob {blob_client.blob_name} at offset {offset}",
+                            exc_info=True,
+                        )
+                        raise
                 hasher.update(chunk_bytes)
                 report_file.write(chunk_bytes)
+                offset += len(chunk_bytes)
 
         downloaded_md5 = hasher.digest()
         if downloaded_md5 != source_md5:
             os.remove(file_path)
             logging.getLogger("nilakandi.pull").error(
-                f"MD5 mismatch for blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}",
+                f"MD5 mismatch for {self.subscription.display_name} blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}",
                 exc_info=True,
             )
             raise ValueError(
-                f"MD5 mismatch for blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}"
+                f"MD5 mismatch for {self.subscription.display_name} blob {blob_client.blob_name}: {downloaded_md5} != {source_md5}"
             )
 
         # res.seek(0)
