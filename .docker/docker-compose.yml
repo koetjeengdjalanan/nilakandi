@@ -61,6 +61,7 @@ services:
     hostname: Nilakandi-db
     container_name: Nilakandi-db
     image: postgres:16
+    command: ['postgres', '-c', 'max_connections=1000']
     restart: always
     volumes:
       - nilakandi-db-data:/var/lib/postgresql/data

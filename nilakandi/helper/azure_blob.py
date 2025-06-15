@@ -342,15 +342,15 @@ class Blobs:
         """
         # Convert column headers from PascalCase to snake_case
         chunk.columns = [to_snake(col) for col in chunk.columns]
-        for col in [
-            "date",
-            "billing_period_start_date",
-            "billing_period_end_date",
-        ]:
-            if col in chunk.columns:
-                chunk[col] = pd.to_datetime(
-                    chunk[col], dayfirst=True, errors="coerce", utc=True
-                ).dt.strftime("%Y-%m-%d")
+        # for col in [
+        #     "date",
+        #     "billing_period_start_date",
+        #     "billing_period_end_date",
+        # ]:
+        #     if col in chunk.columns:
+        #         chunk[col] = pd.to_datetime(
+        #             chunk[col], dayfirst=True, errors="coerce", utc=True
+        #         ).dt.strftime("%Y-%m-%d")
 
         chunk.replace({nan: None, "": None}, inplace=True)
         records = chunk.to_dict("records")
