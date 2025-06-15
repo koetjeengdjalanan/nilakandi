@@ -68,6 +68,8 @@ class Blobs:
         self.blob_service_client = BlobServiceClient(
             account_url="https://stanillakandi.blob.core.windows.net",
             credential=auth.credential,
+            connection_timeout=60 * 5,
+            read_timeout=60 * 5,
             retry_policy=retry,
         )
         self.subscription: SubscriptionModel = (
@@ -289,7 +291,7 @@ class Blobs:
                 for attempt in range(max_attempts):
                     try:
                         chunk_bytes = blob_client.download_blob(
-                            offset=offset, length=length
+                            offset=offset, length=length, timeout=60 * 5
                         ).readall()
                         break
                     except HttpResponseError:
@@ -318,7 +320,9 @@ class Blobs:
             )
 
         # res.seek(0)
-        for chunk in pd.read_csv(file_path, chunksize=chunk_size, low_memory=False):
+        for chunk in pd.read_csv(
+            file_path, chunksize=chunk_size, low_memory=False, dayfirst=True
+        ):
             yield chunk
 
     def _process_chunk(
