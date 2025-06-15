@@ -10,3 +10,4 @@ AZURE_STORAGE_CONTAINER: str = env("AZURE_STORAGE_CONTAINER", default="nilakandi
 AZURE_REPORT_DOWNLOAD_DIR: str = env(
     "AZURE_REPORT_DOWNLOAD_DIR", default="azure-reports"
 )
+AZURE_TIMEOUT: int = env("AZURE_TIMEOUT", default=3600, cast=int)

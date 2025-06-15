@@ -68,8 +68,8 @@ class Blobs:
         self.blob_service_client = BlobServiceClient(
             account_url="https://stanillakandi.blob.core.windows.net",
             credential=auth.credential,
-            connection_timeout=60 * 5,
-            read_timeout=60 * 5,
+            connection_timeout=settings.AZURE_TIMEOUT,
+            read_timeout=settings.AZURE_TIMEOUT,
             retry_policy=retry,
         )
         self.subscription: SubscriptionModel = (
@@ -262,7 +262,7 @@ class Blobs:
         from hashlib import md5
 
         props = blob_client.get_blob_properties()
-        if props.size == 0:
+        if props.size == 0 or blob_info.byte_count == 0:
             logging.getLogger("nilakandi.pull").error(
                 f"Blob {blob_client.blob_name} is empty", exc_info=True
             )
@@ -291,7 +291,9 @@ class Blobs:
                 for attempt in range(max_attempts):
                     try:
                         chunk_bytes = blob_client.download_blob(
-                            offset=offset, length=length, timeout=60 * 5
+                            offset=offset,
+                            length=length,
+                            timeout=settings.AZURE_TIMEOUT,
                         ).readall()
                         break
                     except HttpResponseError:
