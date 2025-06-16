@@ -293,6 +293,7 @@ class Blobs:
                         chunk_bytes = blob_client.download_blob(
                             offset=offset,
                             length=length,
+                            max_concurrency=4,
                             timeout=settings.AZURE_TIMEOUT,
                         ).readall()
                         break

@@ -228,9 +228,15 @@ def export_costs_to_blob(
     return exports
 
 
-@shared_task(name="nilakandi.tasks.grab_cost_export_history")
+@shared_task(
+    name="nilakandi.tasks.grab_cost_export_history",
+    bind=True,
+    max_retries=5,
+    default_retry_delay=60,
+)
 @with_sub_name
 def grab_cost_export_history(
+    self,
     bearer: str,
     subscription_id: UUID,
 ) -> dict[str, any]:
@@ -244,38 +250,55 @@ def grab_cost_export_history(
     Returns:
         dict[str, any]: A dictionary containing the result of the export history retrieval and save operation.
     """
-    res = (
-        ExportHistory(
-            bearer_token=bearer,
-            subscription=subscription_id,
+    try:
+        res = (
+            ExportHistory(
+                bearer_token=bearer,
+                subscription=subscription_id,
+            )
+            .pull()
+            .db_save()
         )
-        .pull()
-        .db_save()
-    )
+    except Exception as e:
+        logging.getLogger("nilakandi.tasks").error(
+            f"Error fetching cost export history for subscription {subscription_id}: {e}",
+            exc_info=True,
+        )
+        raise self.retry(exc=e, countdown=60)
     return res.res
 
 
-@shared_task(name="nilakandi.tasks.grab_blobs")
+@shared_task(
+    name="nilakandi.tasks.grab_blobs", bind=True, max_retries=5, default_retry_delay=60
+)
 @with_sub_name
 def grab_blobs(
+    self,
     creds: dict[str, str],
     subscription_id: UUID,
     start_date: datetime,
     end_date: datetime,
 ) -> dict[str, any]:
-    auth = azi.Auth(
-        client_id=creds["client_id"],
-        tenant_id=creds["tenant_id"],
-        client_secret=creds["client_secret"],
-    )
-    blobs: Blobs = Blobs(
-        container_name="testcontainer",
-        auth=auth,
-        subscription=subscription_id,
-    ).aggregate_manifest_details(
-        start_date=start_date,
-        end_date=end_date,
-    )
+    try:
+        auth = azi.Auth(
+            client_id=creds["client_id"],
+            tenant_id=creds["tenant_id"],
+            client_secret=creds["client_secret"],
+        )
+        blobs: Blobs = Blobs(
+            container_name="testcontainer",
+            auth=auth,
+            subscription=subscription_id,
+        ).aggregate_manifest_details(
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as e:
+        logging.getLogger("nilakandi.tasks").error(
+            f"Error fetching blobs for subscription {subscription_id}: {e}",
+            exc_info=True,
+        )
+        raise self.retry(exc=e, countdown=60)
     tasks_id: list[UUID] = []
     for blob in blobs.collected_blob_data:
         task = process_blob.delay(
@@ -291,23 +314,37 @@ def grab_blobs(
     }
 
 
-@shared_task(name="nilakandi.tasks.process_blob")
+@shared_task(
+    name="nilakandi.tasks.process_blob",
+    bind=True,
+    max_retries=5,
+    default_retry_delay=60,
+    acks_late=True,
+)
 @with_sub_name
 def process_blob(
+    self,
     creds: dict[str, str],
     subscription_id: UUID,
     blob_info: dict,
 ) -> dict[str, any]:
-    auth = azi.Auth(
-        client_id=creds["client_id"],
-        tenant_id=creds["tenant_id"],
-        client_secret=creds["client_secret"],
-    )
-    blobs = Blobs(
-        container_name="testcontainer",
-        auth=auth,
-        subscription=subscription_id,
-    )
-    blobs.collected_blob_data = [BlobsInfo(**blob_info)]
-    blobs.import_blobs_from_manifest()
+    try:
+        auth = azi.Auth(
+            client_id=creds["client_id"],
+            tenant_id=creds["tenant_id"],
+            client_secret=creds["client_secret"],
+        )
+        blobs = Blobs(
+            container_name="testcontainer",
+            auth=auth,
+            subscription=subscription_id,
+        )
+        blobs.collected_blob_data = [BlobsInfo(**blob_info)]
+        blobs.import_blobs_from_manifest()
+    except Exception as e:
+        logging.getLogger("nilakandi.tasks").error(
+            f"Error fetching blob for subscription {subscription_id}: {e}",
+            exc_info=True,
+        )
+        raise self.retry(exc=e, countdown=60)
     return blobs.total_imported
