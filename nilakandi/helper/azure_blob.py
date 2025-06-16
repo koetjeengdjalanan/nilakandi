@@ -323,7 +323,12 @@ class Blobs:
 
         # res.seek(0)
         for chunk in pd.read_csv(
-            file_path, chunksize=chunk_size, low_memory=False, dayfirst=True
+            file_path,
+            chunksize=chunk_size,
+            dayfirst=True,
+            engine="python",
+            sep=r',(?=(?:[^"]*"[^"]*")*[^"]*$)',
+            quotechar='"',
         ):
             yield chunk
 

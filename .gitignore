@@ -148,3 +148,4 @@ dmypy.json
 debug*
 devAssets/
 devAssets/*
+azure-reports*
