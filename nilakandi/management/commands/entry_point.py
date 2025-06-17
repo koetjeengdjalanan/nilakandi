@@ -45,6 +45,7 @@ class Command(BaseCommand):
 
         def init_app():
             logging.getLogger("django").info("👣 Initializing application...")
+            # call_command("makemigrations", interactive=False) # Removed this line
 
             # Ensure migrations directory and __init__.py exist for 'nilakandi' app
             try:
@@ -64,8 +65,18 @@ class Command(BaseCommand):
                 # Allow makemigrations to proceed and potentially fail with its own error if this step fails.
 
             call_command("makemigrations", "nilakandi", interactive=False)
-            logging.getLogger("django.db").info("💽 Migrating database...")
-            call_command("migrate", interactive=False)
+            logging.getLogger("django.db").info(
+                "💽 Migrating database (nilakandi app)..."
+            )
+            call_command(
+                "migrate", "nilakandi", interactive=False
+            )  # Migrate nilakandi specifically
+            logging.getLogger("django.db").info(
+                "💽 Migrating database (remaining apps)..."
+            )
+            call_command(
+                "migrate", interactive=False
+            )  # Migrate other apps (auth, admin, etc.)
 
             try:
                 logging.getLogger("django.db").info(
