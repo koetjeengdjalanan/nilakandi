@@ -6,4 +6,4 @@ class NilakandiConfig(AppConfig):
     name = "nilakandi"
 
     def ready(self):
-        import nilakandi.signals
+        import nilakandi.signals  # noqa: F401

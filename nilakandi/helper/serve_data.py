@@ -1,4 +1,3 @@
-
 import pandas as pd
 
 from nilakandi.models import Subscription as SubscriptionsModel
@@ -8,7 +7,9 @@ class SubsData:
     def __init__(self, sub: SubscriptionsModel, total_month: bool = True):
         self.sub = sub
         self.total_month = total_month
-        self.services = pd.DataFrame(list(self.sub.services_set.all().values()))
+        self.services = pd.DataFrame(
+            list(self.sub.services_set.exclude(service_name="Unassigned").values())
+        )
         self.marketplaces = pd.DataFrame(list(self.sub.marketplace_set.all().values()))
 
     def service(self) -> pd.DataFrame:
