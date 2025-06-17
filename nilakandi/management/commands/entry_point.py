@@ -1,5 +1,7 @@
 import logging
+from pathlib import Path
 
+from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import call_command
@@ -43,6 +45,24 @@ class Command(BaseCommand):
 
         def init_app():
             logging.getLogger("django").info("👣 Initializing application...")
+
+            # Ensure migrations directory and __init__.py exist for 'nilakandi' app
+            try:
+                app_config = django_apps.get_app_config("nilakandi")
+                migrations_dir = Path(app_config.path) / "migrations"
+                migrations_dir.mkdir(parents=True, exist_ok=True)
+                init_file = migrations_dir / "__init__.py"
+                if not init_file.exists():
+                    init_file.touch()
+                logging.getLogger("django").info(
+                    f"Ensured migrations directory and __init__.py for 'nilakandi' app at {migrations_dir}"
+                )
+            except Exception as e:
+                logging.getLogger("django").error(
+                    f"Error ensuring migrations directory for 'nilakandi': {e}"
+                )
+                # Allow makemigrations to proceed and potentially fail with its own error if this step fails.
+
             call_command("makemigrations", "nilakandi", interactive=False)
             logging.getLogger("django.db").info("💽 Migrating database...")
             call_command("migrate", interactive=False)
@@ -79,14 +99,14 @@ class Command(BaseCommand):
             call_command("populate_db", start_date=settings.EARLIEST_DATA)
             logging.getLogger("django").info("🦸 Creating superuser...")
             su_creds: dict[str, str] = {
-                "user_name": env(var="NILAKANDI_SUPER_USER_USERNAME", default="arjuna"),
+                "user_name": env(var="NILAKANDI_SUPER_USER_USERNAME", default="arjuna"),  # type: ignore
                 "password": env(
-                    var="NILAKANDI_SUPER_USER_PASSWORD", default="arjunamencaricinta"
+                    var="NILAKANDI_SUPER_USER_PASSWORD", default="arjunamencaricinta"  # type: ignore
                 ),
                 "email": env(
-                    var="NILAKANDI_SUPER_USER_EMAIL", default="arjuna@nilakandi.local"
+                    var="NILAKANDI_SUPER_USER_EMAIL", default="arjuna@nilakandi.local"  # type: ignore
                 ),
-            }
+            }  # type: ignore
             try:
                 User.objects.get(username=su_creds["user_name"])
                 logging.getLogger("django").info(

@@ -327,7 +327,7 @@ class Blobs:
             file_path,
             chunksize=chunk_size,
             parse_dates=["Date", "BillingPeriodStartDate", "BillingPeriodEndDate"],
-            date_format="%d/%m/%Y",
+            date_format="%m/%d/%Y",
             cache_dates=True,
             engine="python",
             sep=r',(?=(?:[^"]*"[^"]*")*[^"]*$)',
@@ -351,13 +351,13 @@ class Blobs:
         """
         # Convert column headers from PascalCase to snake_case
         chunk.columns = [to_snake(col) for col in chunk.columns]
-        for col in [
-            "date",
-            "billing_period_start_date",
-            "billing_period_end_date",
-        ]:
-            if col in chunk.columns:
-                chunk[col] = chunk[col].dt.strftime("%Y-%m-%d")
+        # for col in [
+        #     "date",
+        #     "billing_period_start_date",
+        #     "billing_period_end_date",
+        # ]:
+        #     if col in chunk.columns:
+        #         chunk[col] = chunk[col].dt.strftime("%Y-%m-%d")
 
         chunk.replace({nan: None, "": None}, inplace=True)
         records = chunk.to_dict("records")
