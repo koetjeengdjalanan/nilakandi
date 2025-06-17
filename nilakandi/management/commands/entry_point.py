@@ -46,6 +46,35 @@ class Command(BaseCommand):
             call_command("makemigrations", "nilakandi", interactive=False)
             logging.getLogger("django.db").info("💽 Migrating database...")
             call_command("migrate", interactive=False)
+
+            try:
+                logging.getLogger("django.db").info(
+                    "🔎 Verifying table creation after migration..."
+                )
+
+                if not MigrationRecorder.Migration.objects.exists():
+                    pass
+
+                from nilakandi.models import Subscription
+
+                if not Subscription.objects.exists():
+                    pass
+
+                logging.getLogger("django.db").info(
+                    "✅ Tables appear to be created/verified after migration."
+                )
+
+            except DjangoProgrammingError as e:
+                logging.getLogger("django.db").error(
+                    f"❌ Database tables not created or verified after migrate: {e}"
+                )
+                raise
+            except Exception as e:
+                logging.getLogger("django.db").error(
+                    f"❌ Unexpected error during table verification after migrate: {e}"
+                )
+                raise
+
             logging.getLogger("django.db").info("💽 Populating database...")
             call_command("populate_db", start_date=settings.EARLIEST_DATA)
             logging.getLogger("django").info("🦸 Creating superuser...")
@@ -87,10 +116,15 @@ class Command(BaseCommand):
             )
             check = [(m.app, m.name) for m in MigrationRecorder.Migration.objects.all()]
             if not check:
-                raise UndefinedTable(...)
+
+                raise UndefinedTable("No migrations recorded, assuming fresh database.")
             logging.getLogger("django").info("🥳 Application is already initialized.")
             finishing()
-        except (UndefinedTable, DjangoProgrammingError):
+        except (
+            UndefinedTable,
+            DjangoProgrammingError,
+        ):
+            logging.getLogger("django").info("✒️ Application is to be initialized")
             init_app()
             finishing()
         except Exception as e:
