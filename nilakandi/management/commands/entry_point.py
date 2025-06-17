@@ -4,6 +4,9 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+from django.db.migrations.recorder import MigrationRecorder
+from django.db.utils import ProgrammingError as DjangoProgrammingError
+from psycopg2.errors import UndefinedTable
 
 from config.env import env
 
@@ -30,46 +33,68 @@ class Command(BaseCommand):
     help = "Initializes the application by making migrations, migrating the database, populating initial data, creating a superuser, and starting the server."
 
     def handle(self, *args, **options):
-        logging.getLogger("django").info("Initializing application...")
-        call_command("makemigrations", "nilakandi", interactive=False)
-        logging.getLogger("django.db").info("Migrating database...")
-        call_command("migrate", interactive=False)
-        logging.getLogger("django.db").info("Populating database...")
-        call_command("populate_db", start_date=settings.EARLIEST_DATA)
-        logging.getLogger("django").info("Creating superuser...")
-        su_creds: dict[str, str] = {
-            "user_name": env(var="NILAKANDI_SUPER_USER_USERNAME", default="arjuna"),
-            "password": env(
-                var="NILAKANDI_SUPER_USER_PASSWORD", default="arjunamencaricinta"
-            ),
-            "email": env(
-                var="NILAKANDI_SUPER_USER_EMAIL", default="arjuna@nilakandi.local"
-            ),
-        }
-        try:
-            User.objects.get(username=su_creds["user_name"])
-            logging.getLogger("django").info(
-                "Superuser already exists. Skipping superuser creation."
-            )
-        except User.DoesNotExist:
-            User.objects.create_superuser(
-                username=su_creds["user_name"],
-                password=su_creds["password"],
-                email=su_creds["email"],
-            )
-            self.stdout.writelines(
-                (
-                    self.style.NOTICE(
-                        text="Please take note of this superuser credentials:\n"
-                    ),
-                    f"UserName: {su_creds['user_name']}\n",
-                    f"Password: {su_creds['password']}\n",
-                    f"Email   : {su_creds['email']}\n",
+        def finishing():
+            logging.getLogger("django").info("📡 Starting the server...")
+            try:
+                call_command("runserver", "0.0.0.0:21180")
+            except KeyboardInterrupt:
+                logging.getLogger("django").critical("☠️ Application terminated.")
+                exit(1)
+
+        def init_app():
+            logging.getLogger("django").info("👣 Initializing application...")
+            call_command("makemigrations", "nilakandi", interactive=False)
+            logging.getLogger("django.db").info("💽 Migrating database...")
+            call_command("migrate", interactive=False)
+            logging.getLogger("django.db").info("💽 Populating database...")
+            call_command("populate_db", start_date=settings.EARLIEST_DATA)
+            logging.getLogger("django").info("🦸 Creating superuser...")
+            su_creds: dict[str, str] = {
+                "user_name": env(var="NILAKANDI_SUPER_USER_USERNAME", default="arjuna"),
+                "password": env(
+                    var="NILAKANDI_SUPER_USER_PASSWORD", default="arjunamencaricinta"
+                ),
+                "email": env(
+                    var="NILAKANDI_SUPER_USER_EMAIL", default="arjuna@nilakandi.local"
+                ),
+            }
+            try:
+                User.objects.get(username=su_creds["user_name"])
+                logging.getLogger("django").info(
+                    "🦸 Superuser already exists. Skipping superuser creation."
                 )
-            )
-        logging.getLogger("django").info("Application initialized.")
+            except User.DoesNotExist:
+                User.objects.create_superuser(
+                    username=su_creds["user_name"],
+                    password=su_creds["password"],
+                    email=su_creds["email"],
+                )
+                self.stdout.writelines(
+                    (
+                        self.style.NOTICE(
+                            text="✒️ Please take note of this superuser credentials:\n"
+                        ),
+                        f"UserName: {su_creds['user_name']}\n",
+                        f"Password: {su_creds['password']}\n",
+                        f"Email   : {su_creds['email']}\n",
+                    )
+                )
+            logging.getLogger("django").info("Application initialized.")
+
         try:
-            call_command("runserver", "0.0.0.0:21180")
-        except KeyboardInterrupt:
-            logging.getLogger("django").critical("Application terminated.")
+            logging.getLogger("django").info(
+                "📋 Checking if the application is already initialized..."
+            )
+            check = [(m.app, m.name) for m in MigrationRecorder.Migration.objects.all()]
+            if not check:
+                raise UndefinedTable(...)
+            logging.getLogger("django").info("🥳 Application is already initialized.")
+            finishing()
+        except (UndefinedTable, DjangoProgrammingError):
+            init_app()
+            finishing()
+        except Exception as e:
+            logging.getLogger("django").critical(
+                "❌ An error occurred during initialization: %s", e
+            )
             exit(1)

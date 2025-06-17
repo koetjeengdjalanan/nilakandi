@@ -326,10 +326,13 @@ class Blobs:
         for chunk in pd.read_csv(
             file_path,
             chunksize=chunk_size,
-            dayfirst=True,
+            parse_dates=["Date", "BillingPeriodStartDate", "BillingPeriodEndDate"],
+            date_format="%d/%m/%Y",
+            cache_dates=True,
             engine="python",
             sep=r',(?=(?:[^"]*"[^"]*")*[^"]*$)',
             quotechar='"',
+            on_bad_lines="error",
         ):
             yield chunk
 
@@ -348,15 +351,13 @@ class Blobs:
         """
         # Convert column headers from PascalCase to snake_case
         chunk.columns = [to_snake(col) for col in chunk.columns]
-        # for col in [
-        #     "date",
-        #     "billing_period_start_date",
-        #     "billing_period_end_date",
-        # ]:
-        #     if col in chunk.columns:
-        #         chunk[col] = pd.to_datetime(
-        #             chunk[col], dayfirst=True, errors="coerce", utc=True
-        #         ).dt.strftime("%Y-%m-%d")
+        for col in [
+            "date",
+            "billing_period_start_date",
+            "billing_period_end_date",
+        ]:
+            if col in chunk.columns:
+                chunk[col] = chunk[col].dt.strftime("%Y-%m-%d")
 
         chunk.replace({nan: None, "": None}, inplace=True)
         records = chunk.to_dict("records")
