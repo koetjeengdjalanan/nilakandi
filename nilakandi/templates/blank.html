@@ -12,17 +12,75 @@
         {% endif %}
       {% endblock title %}
     </title>
+    <link rel="icon"
+          type="image/png"
+          href="https://www.global.ntt/wp-content/themes/globalntt/img/favicon/favicon.png"
+          sizes="192x192">
     {% load django_bootstrap5 %}
     {% bootstrap_css %}
     {% bootstrap_javascript %}
+    <script src="https://unpkg.com/htmx.org@2.0.4"
+            integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+            crossorigin="anonymous"></script>
   </head>
-  <body>{{ pivot | safe }}</body>
+  <body>
+    <div id="report-container"
+         hx-post="{% url 'get_report' %}"
+         hx-trigger="load, every 5s"
+         hx-swap="none"
+         hx-vals='{"id": "{{ id }}"}'
+         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+         hx-on::after-request=" if (event.detail.xhr.status === 200) { const json = JSON.parse(event.detail.xhr.responseText); document.title = json.page_title; this.removeAttribute('hx-trigger'); this.innerHTML = json.pivot; htmx.process(this); } ">
+      <div class="container d-flex flex-column justify-content-center align-items-center vh-100">
+        <div class="row">
+          <div class="spinner-status" role='status'>
+            <div class="spinner-border text-primary m-3" role="status" id="spinner">
+              <span class="visually-hidden">Generating Report...</span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          Generating Report<span class="dot-animate" />
+        </div>
+      </div>
+    </div>
+  </body>
   <style>
     th {
       white-space: nowrap;
     }
     td {
       text-align: right;
+    }
+    #spinner {
+      width: 5rem;
+      height: 5rem;
+    }
+    .dot-animate {
+      display: inline-block;
+      width: 1.5em;
+      text-align: left;
+    }
+    .dot-animate::after {
+      content: '';
+      display: inline-block;
+      width: 1em;
+      animation: dots 1s steps(3, end) infinite;
+      vertical-align: bottom;
+    }
+    @keyframes dots {
+      0%, 20% {
+        content: '';
+      }
+      40% {
+        content: '.';
+      }
+      60% {
+        content: '..';
+      }
+      80%, 100% {
+        content: '...';
+      }
     }
   </style>
 </html>

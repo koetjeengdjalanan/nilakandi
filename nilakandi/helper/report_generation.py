@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Dict
 
 import pandas as pd
 from django.db.models import Max, Min, Sum
@@ -7,29 +8,263 @@ from django.db.models.functions import TruncMonth
 from nilakandi.models import ExportReport as ExportReportModel
 from nilakandi.models import Subscription as SubscriptionModel
 
+COLUMN_STACKS: Dict[str, tuple[str]] = {
+    "summary": ["subscription_name", "month", "publisher_type", "total_cost"],
+    "services": [
+        "meter_category",
+        "meter_sub_category",
+        "meter_name",
+        "month",
+        "total_cost",
+    ],
+    "marketplaces": ["publisher_name", "plan_name", "month", "total_cost"],
+    "virtualmachines": [
+        "resource_name",
+        "resource_group",
+        "tags",
+        "meter_category",
+        "resource_id",
+        "billing_period_end_date",
+        "total_cost",
+        "vm_sku",
+    ],
+}
 
-def summary(start_date: date = None, end_date: date = None) -> pd.DataFrame:
-    if start_date is None or end_date is None:
-        dates = ExportReportModel.objects.aggregate(
-            min_date=Min("billing_period_start_date"),
-            max_date=Max("billing_period_end_date"),
-        )
-        start_date = start_date or dates["min_date"]
-        end_date = end_date or dates["max_date"]
 
-    raw = (
-        ExportReportModel.objects.filter(
-            billing_period_start_date__isnull=False,
-            billing_period_start_date__gte=start_date,
-            billing_period_end_date__isnull=False,
-            billing_period_end_date__lte=end_date,
-        )
-        .annotate(month=TruncMonth("billing_period_end_date"))
-        .values("subscription_name", "month", "publisher_type")
-        .annotate(total_cost=Sum("cost_in_billing_currency"))
-        .order_by("month")
+def _min_max_dates(
+    start_date: date = None,
+    end_date: date = None,
+) -> tuple[date, date]:
+    dates = ExportReportModel.objects.aggregate(
+        min_date=Min("billing_period_start_date"),
+        max_date=Max("billing_period_end_date"),
     )
-    df = pd.DataFrame(raw)
+    start_date = start_date or dates["min_date"]
+    end_date = end_date or dates["max_date"]
+    return start_date, end_date
+
+
+def grab_from_azure(
+    report_type: str,
+    subscription,
+    start_date=None,
+    end_date=None,
+):
+    from io import StringIO
+
+    from caseutil import to_snake
+    from django.core.files.storage import storages
+    from psycopg2.extras import DateTimeTZRange
+
+    from nilakandi.models import ExportHistory as ExportHistoryModel
+
+    if report_type not in COLUMN_STACKS:
+        raise ValueError("Invalid report type provided")
+
+    data_source = storages["azures-storages"]
+    start_date, end_date = _min_max_dates(start_date, end_date)
+
+    q_args = {
+        "report_datetime_range__contained_by": DateTimeTZRange(start_date, end_date)
+    }
+    if report_type != "summary":
+        q_args["subscription"] = subscription.pk
+    files_path = ExportHistoryModel.objects.filter(**q_args).values_list(
+        "blobs_path", flat=True
+    )
+
+    list_of_raw_data = [
+        (file, data_source.size(file))
+        for path in files_path
+        for file in data_source.listdir(path)[1]
+        if file.endswith(".csv")
+    ]
+
+    res = []
+    for file, _ in list_of_raw_data:
+        with data_source.open(file, "rb") as raw:
+            try:
+                df = pd.read_csv(
+                    StringIO(raw.read().decode("utf-8")),
+                    parse_dates=[
+                        "Date",
+                        "BillingPeriodStartDate",
+                        "BillingPeriodEndDate",
+                    ],
+                    date_format="%m/%d/%Y",
+                    cache_dates=True,
+                    engine="python",
+                    encoding="utf-8",
+                    sep=r',(?=(?:[^"]*"[^"]*")*[^"]*$)',
+                    quotechar='"',
+                    on_bad_lines="error",
+                )
+            except Exception:
+                raise
+            if not df.empty:
+                df.columns = [to_snake(col) for col in df.columns]
+                res.append(df)
+
+    if not res:
+        return pd.DataFrame()
+
+    df_concated = pd.concat(res, ignore_index=True)
+    if "cost_in_billing_currency" in df_concated.columns:
+        df_concated.rename(
+            columns={"cost_in_billing_currency": "total_cost"}, inplace=True
+        )
+
+    for col in ("billing_period_start_date", "billing_period_end_date"):
+        if col not in df_concated.columns:
+            raise KeyError(f"{col} column missing in data")
+    df_concated = df_concated[
+        df_concated["billing_period_start_date"].notnull()
+        & df_concated["billing_period_end_date"].notnull()
+    ]
+
+    cols = df_concated.columns
+    if report_type == "summary":
+        pass
+    elif report_type == "services":
+        if "meter_category" not in cols:
+            raise KeyError("meter_category column missing")
+        mcat = df_concated["meter_category"].astype(str)
+        df_concated = df_concated[~mcat.str.contains("Unassigned", na=False)]
+    elif report_type == "marketplaces":
+        if "publisher_type" not in cols:
+            raise KeyError("publisher_type column missing")
+        pub = df_concated["publisher_type"].astype(str)
+        df_concated = df_concated[pub.str.lower() == "marketplace"]
+    elif report_type == "virtualmachines":
+        for col in ("meter_category", "resource_id", "additional_info"):
+            if col not in cols:
+                raise KeyError(f"{col} column missing")
+        mcat = df_concated["meter_category"].astype(str)
+        df_concated = df_concated[
+            ~mcat.str.contains("Microsoft Defender for Cloud", case=False, na=False)
+        ]
+        rid = df_concated["resource_id"].astype(str)
+        df_concated = df_concated[
+            rid.str.contains(
+                r"microsoft\.compute/virtualmachines|microsoft\.compute/disks",
+                case=False,
+                na=False,
+                regex=True,
+            )
+        ]
+        df_concated = df_concated.assign(
+            vm_sku=df_concated["additional_info"].map(
+                lambda x: x.get("ServiceType") if isinstance(x, dict) else None
+            )
+        )
+    else:
+        raise ValueError("Invalid report type provided")
+
+    final_cols = [
+        col for col in COLUMN_STACKS[report_type] if col in df_concated.columns
+    ]
+    if not final_cols:
+        raise KeyError(f"No columns found for report type {report_type}")
+    return df_concated[final_cols]
+
+
+def db_source_switch(
+    report_type: str,
+    subscription: SubscriptionModel,
+    start_date: date = None,
+    end_date: date = None,
+):
+
+    start_date, end_date = _min_max_dates(start_date, end_date)
+
+    match report_type:
+        case "summary":
+            raw = (
+                ExportReportModel.objects.filter(
+                    billing_period_start_date__isnull=False,
+                    billing_period_start_date__gte=start_date,
+                    billing_period_end_date__isnull=False,
+                    billing_period_end_date__lte=end_date,
+                )
+                .annotate(month=TruncMonth("billing_period_end_date"))
+                .values("subscription_name", "month", "publisher_type")
+                .annotate(total_cost=Sum("cost_in_billing_currency"))
+                .order_by("month")
+            )
+        case "services":
+            raw = (
+                ExportReportModel.objects.filter(
+                    subscription_name__contains=subscription.display_name,
+                    billing_period_start_date__isnull=False,
+                    billing_period_start_date__gte=start_date,
+                    billing_period_end_date__isnull=False,
+                    billing_period_end_date__lte=end_date,
+                )
+                .exclude(meter_category="Unassigned")
+                .annotate(month=TruncMonth("billing_period_start_date"))
+                .values(
+                    "meter_category",
+                    "meter_sub_category",
+                    "meter_name",
+                    "month",
+                )
+                .annotate(total_cost=Sum("cost_in_billing_currency"))
+                .order_by("month")
+            )
+        case "marketplaces":
+            raw = (
+                ExportReportModel.objects.filter(
+                    subscription_name__contains=subscription.display_name,
+                    billing_period_start_date__isnull=False,
+                    billing_period_start_date__gte=start_date,
+                    billing_period_end_date__isnull=False,
+                    billing_period_end_date__lte=end_date,
+                    publisher_type__iexact="Marketplace",
+                )
+                .annotate(month=TruncMonth("billing_period_start_date"))
+                .values("publisher_name", "plan_name", "month")
+                .annotate(total_cost=Sum("cost_in_billing_currency"))
+                .order_by("month")
+            )
+        case "virtualmachines":
+            from django.db.models import Q
+            from django.db.models.fields.json import KeyTextTransform
+
+            raw = (
+                ExportReportModel.objects.filter(
+                    Q(resource_id__icontains="microsoft.compute/virtualmachines")
+                    | Q(resource_id__icontains="microsoft.compute/disks")
+                )
+                .filter(
+                    resource_id__icontains=subscription.pk,
+                    billing_period_start_date__isnull=False,
+                    billing_period_start_date__gte=start_date,
+                    billing_period_end_date__isnull=False,
+                    billing_period_end_date__lte=end_date,
+                )
+                .exclude(Q(meter_category__iexact="Microsoft Defender for Cloud"))
+                .annotate(
+                    vm_sku=KeyTextTransform("ServiceType", "additional_info"),
+                )
+                .values(
+                    "resource_name",
+                    "resource_group",
+                    "tags",
+                    "meter_category",
+                    "resource_id",
+                    "billing_period_end_date",
+                    "vm_sku",
+                    "cost_in_billing_currency",
+                )
+                .order_by("billing_period_end_date")
+            )
+        case _:
+            raise ValueError("Invalid report type provided")
+    return pd.DataFrame(raw)
+
+
+def summary(source: pd.DataFrame) -> pd.DataFrame:
+    df = source
     if df.empty:
         return df
     df["month"] = pd.to_datetime(df["month"]).dt.to_period("M")
@@ -62,36 +297,8 @@ def summary(start_date: date = None, end_date: date = None) -> pd.DataFrame:
     return pivot
 
 
-def services(
-    subscription: SubscriptionModel, start_date: date = None, end_date: date = None
-) -> pd.DataFrame:
-    if start_date is None or end_date is None:
-        dates = ExportReportModel.objects.aggregate(
-            min_date=Min("billing_period_start_date"),
-            max_date=Max("billing_period_end_date"),
-        )
-        start_date = start_date or dates["min_date"]
-        end_date = end_date or dates["max_date"]
-    raw = (
-        ExportReportModel.objects.filter(
-            subscription_name__contains=subscription.display_name,
-            billing_period_start_date__isnull=False,
-            billing_period_start_date__gte=start_date,
-            billing_period_end_date__isnull=False,
-            billing_period_end_date__lte=end_date,
-        )
-        .exclude(meter_category="Unassigned")
-        .annotate(month=TruncMonth("billing_period_start_date"))
-        .values(
-            "meter_category",
-            "meter_sub_category",
-            "meter_name",
-            "month",
-        )
-        .annotate(total_cost=Sum("cost_in_billing_currency"))
-        .order_by("month")
-    )
-    df = pd.DataFrame(raw)
+def services(source: pd.DataFrame) -> pd.DataFrame:
+    df = source
     if df.empty:
         return df
     df["meter_sub_category"] = df["meter_sub_category"].fillna(df["meter_category"])
@@ -123,32 +330,8 @@ def services(
     return pivot
 
 
-def marketplaces(
-    subscription: SubscriptionModel, start_date: date = None, end_date: date = None
-) -> pd.DataFrame:
-    if start_date is None or end_date is None:
-        dates = ExportReportModel.objects.aggregate(
-            min_date=Min("billing_period_start_date"),
-            max_date=Max("billing_period_end_date"),
-        )
-        start_date = start_date or dates["min_date"]
-        end_date = end_date or dates["max_date"]
-
-    raw = (
-        ExportReportModel.objects.filter(
-            subscription_name__contains=subscription.display_name,
-            billing_period_start_date__isnull=False,
-            billing_period_start_date__gte=start_date,
-            billing_period_end_date__isnull=False,
-            billing_period_end_date__lte=end_date,
-            publisher_type__iexact="Marketplace",
-        )
-        .annotate(month=TruncMonth("billing_period_start_date"))
-        .values("publisher_name", "plan_name", "month")
-        .annotate(total_cost=Sum("cost_in_billing_currency"))
-        .order_by("month")
-    )
-    df = pd.DataFrame(raw)
+def marketplaces(source: pd.DataFrame) -> pd.DataFrame:
+    df = source
     if df.empty:
         return df
     df["month"] = pd.to_datetime(df["month"]).dt.to_period("M")
@@ -175,12 +358,7 @@ def marketplaces(
     return pivot
 
 
-def virtual_machine(
-    subscription: SubscriptionModel, start_date: date = None, end_date: date = None
-) -> pd.DataFrame:
-    from django.db.models import Max, Min, Q
-    from django.db.models.fields.json import KeyTextTransform
-
+def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
     # helper to extract tag value
     def extract_tag_value(tags, key: str) -> str:
         if isinstance(tags, str):
@@ -190,77 +368,43 @@ def virtual_machine(
                 return None
         return None
 
-    def categorize_meter_category(row: pd.Series) -> pd.Series:
-        COMPARISON = [
-            (["licenses"], "VM License"),
-            (["machines"], "VM Monthly"),
-            (["unassigned"], "Marketplace"),
-            (["storage"], "Storage Cost"),
-            (["network", "bandwidth"], "VM Connection"),
-        ]
-
-        if "microsoft.compute/virtualmachines" in row.resource_id.lower():
-            for keywords, new_value in COMPARISON:
-                if any(kw in row.meter_category.lower() for kw in keywords):
-                    row.meter_category = new_value
+    def categorize_meter_category(row):
+        r, m = getattr(row, "resource_id", ""), getattr(row, "meter_category", "")
+        if not r or not isinstance(r, str):
+            raise ValueError("Resource ID is None or empty", row)
+        rl, ml = r.lower(), m.lower()
+        if "microsoft.compute/virtualmachines" in rl:
+            for k, v in (
+                [["licenses"], "VM License"],
+                [["machines"], "VM Monthly"],
+                [["unassigned"], "Marketplace"],
+                [["storage"], "Storage Cost"],
+                [["network", "bandwidth"], "VM Connection"],
+            ):
+                if any(x in ml for x in k):
+                    row.meter_category = v
                     return row
-        if "microsoft.compute/disks" in row.resource_id.lower():
+        if "microsoft.compute/disks" in rl:
             row.meter_category = "Storage Cost"
             return row
-        raise ValueError("Resource ID is None or empty", row)
-        return row
-
-    if start_date is None or end_date is None:
-        dates = ExportReportModel.objects.aggregate(
-            min_date=Min("billing_period_start_date"),
-            max_date=Max("billing_period_end_date"),
-        )
-        start_date = start_date or dates["min_date"]
-        end_date = end_date or dates["max_date"]
-
-    raw = (
-        ExportReportModel.objects.filter(
-            Q(resource_id__icontains="microsoft.compute/virtualmachines")
-            | Q(resource_id__icontains="microsoft.compute/disks")
-        )
-        .filter(
-            resource_id__icontains=subscription.pk,
-            billing_period_start_date__isnull=False,
-            billing_period_start_date__gte=start_date,
-            billing_period_end_date__isnull=False,
-            billing_period_end_date__lte=end_date,
-        )
-        .exclude(Q(meter_category__iexact="Microsoft Defender for Cloud"))
-        .annotate(
-            vm_sku=KeyTextTransform("ServiceType", "additional_info"),
-        )
-        .values(
-            "resource_name",
-            "resource_group",
-            "tags",
-            "meter_category",
-            "resource_id",
-            "billing_period_end_date",
-            "vm_sku",
-            "cost_in_billing_currency",
-        )
-        .order_by("billing_period_end_date")
-    )
-    df = pd.DataFrame(raw)
-    if df.empty:
-        return df
-
-    df.rename({"cost_in_billing_currency": "total_cost"}, axis=1, inplace=True)
-    df["total_cost"] = df["total_cost"].astype(float)
-    df["month"] = pd.to_datetime(df["billing_period_end_date"]).dt.to_period("M")
-    agg_dict = {col: "last" for col in df.columns if col not in ["month", "total_cost"]}
-    agg_dict["total_cost"] = "sum"
+        raise ValueError("Resource ID does not match expected patterns", row)
 
     # helper to group and aggregate resources with a given prefix
     def aggregate_prefix(prefix: str) -> pd.DataFrame:
         subset = df[df.resource_name.str.startswith(prefix)]
         agg_df = subset.groupby("month", as_index=False).agg(agg_dict)
         return agg_df[df.columns.tolist()]
+
+    df = source
+    if df.empty:
+        return df
+
+    if "cost_in_billing_currency" in df.columns:
+        df.rename({"cost_in_billing_currency": "total_cost"}, axis=1, inplace=True)
+    df["total_cost"] = df["total_cost"].astype(float)
+    df["month"] = pd.to_datetime(df["billing_period_end_date"]).dt.to_period("M")
+    agg_dict = {col: "last" for col in df.columns if col not in ["month", "total_cost"]}
+    agg_dict["total_cost"] = "sum"
 
     for prefix in ["vba-", "veeam-proxy-appliance"]:
         agg_df = aggregate_prefix(prefix)

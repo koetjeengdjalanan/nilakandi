@@ -22,6 +22,16 @@ class ReportForm(forms.Form):
         ("virtualmachines", "Virtual Machines"),
     ]
 
+    data_source = forms.ChoiceField(
+        label="Data Source",
+        choices=[
+            ("db", "From Local Database"),
+            ("azure", "Straight from Azure"),
+            ("upload", "BYOF!"),
+        ],
+        required=True,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
     subscription = forms.ChoiceField(
         label="Subscription",
         choices=SUB_CHOICES,

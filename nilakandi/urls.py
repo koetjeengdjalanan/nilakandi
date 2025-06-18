@@ -17,6 +17,7 @@ urlpatterns = [
         include(
             [
                 path("", views.reports, name="reports"),
+                path("<uuid:id>/", views.view_report, name="view_report"),
                 path("summary/", views.summary, name="summary"),
                 path("services/", views.services_report, name="services report"),
                 path(
@@ -32,4 +33,5 @@ urlpatterns = [
             ]
         ),
     ),
+    path("api/", include([path("get_report", views.get_report, name="get_report")])),
 ]

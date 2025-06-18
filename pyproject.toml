@@ -6,6 +6,7 @@ authors = [{ name = "koetjeengdjalanan", email = "martinsambulare@gmail.com" }]
 license = { text = "NTT Data Ltd." }
 readme = "README.md"
 requires-python = ">=3.11,<4"
+dynamic = ["dependencies"]
 
 [tool.poetry.dependencies]
 django = "^5.1.7"
@@ -29,12 +30,16 @@ redis = "^5.2.1"
 caseutil = "^0.7.2"
 gevent = "^25.4.1"
 jinja2 = "^3.1.6"
+django-storages = {extras = ["azure"], version = "~1.14.6"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
 ruff = "^0.9.9"
 ipython = "^9.0.1"
 djlint = "^1.36.4"
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.8"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]

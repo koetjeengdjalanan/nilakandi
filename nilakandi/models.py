@@ -592,3 +592,110 @@ class ExportReport(models.Model):
     #         "meter_id",
     #         "resource_location",
     #     ]
+
+
+class ReportTypeEnum(Enum):
+    """
+    ReportTypeEnum is an enumeration that defines the types of reports available.
+
+    Attributes:
+        SUMMARY (str): Represents a summary report.
+        SERVICES (str): Represents a services report.
+        MARKETPLACES (str): Represents a marketplaces report.
+        VIRTUAL_MACHINES (str): Represents a virtual machines report.
+    """
+
+    SUMMARY = "Summary"
+    SERVICES = "Services"
+    MARKETPLACES = "Marketplaces"
+    VIRTUAL_MACHINES = "VirtualMachines"
+
+
+class GenerationStatusEnum(Enum):
+    """
+    GenerationStatusEnum is an enumeration that defines the status of report generation.
+
+    Attributes:
+        PENDING (str): Indicates that the report generation is pending.
+        IN_PROGRESS (str): Indicates that the report generation is currently in progress.
+        COMPLETED (str): Indicates that the report generation has been completed successfully.
+        FAILED (str): Indicates that the report generation has failed.
+        STALE (str): Indicates that the report generation is stale, meaning it is outdated or no longer relevant.
+    """
+
+    PENDING = "Pending"
+    IN_PROGRESS = "InProgress"
+    COMPLETED = "Completed"
+    FAILED = "Failed"
+    STALE = "Stale"
+
+
+class ReportDataSourceEnum(Enum):
+    """
+    ReportDataSourceEnum is an enumeration that defines the data sources for report generation.
+
+    Attributes:
+        DB (str): Represents the database as the data source.
+        AZURE (str): Represents Azure as the data source.
+        BYOF (str): Represents "Bring Your Own File" as the data source, allowing users to upload their own data.
+    """
+
+    DB = "db"
+    AZURE = "azure"
+    BYOF = "upload"
+
+
+class GeneratedReports(models.Model):
+    """
+    Model for storing generated reports in the system.
+
+    This model stores information about reports that have been generated for subscriptions,
+    including their type, status, data source, and the actual report data.
+
+    Attributes:
+        id (UUIDField): Primary key identifier for the report, auto-generated UUID.
+        data_source (CharField): Source of the report data, using ReportDataSourceEnum values.
+        subscription (ForeignKey): Reference to the Subscription this report belongs to.
+        report_type (CharField): Type of report, using ReportTypeEnum values.
+        report_data (JSONField): The actual report data stored as JSON.
+        status (CharField): Current status of the report generation, using GenerationStatusEnum values.
+        time_range (DateTimeRangeField): Time period covered by the report.
+        created_at (DateTimeField): Timestamp when the report was created.
+        deleted (BooleanField): Soft deletion flag, True if the report is deleted.
+
+    Meta:
+        required_db_vendor: PostgreSQL is required for this model.
+        ordering: Reports are ordered by creation time (newest first).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=True)
+    data_source = models.CharField(
+        choices=[(e.value, e.name) for e in ReportDataSourceEnum],
+        default=ReportDataSourceEnum.DB.value,
+        db_comment="Data source for the report",
+    )
+    subscription = models.ForeignKey(
+        to=Subscription,
+        to_field="subscription_id",
+        on_delete=models.RESTRICT,
+    )
+    report_type = models.CharField(
+        choices=[(e.value, e.name) for e in ReportTypeEnum],
+        default=ReportTypeEnum.SUMMARY.value,
+        db_comment="Type of the report",
+    )
+    report_data = models.JSONField(default=dict)
+    status = models.CharField(
+        choices=[(e.value, e.name) for e in GenerationStatusEnum],
+        default=GenerationStatusEnum.PENDING.value,
+    )
+    time_range = DateTimeRangeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.subscription} - {self.report_type} [{self.time_range.lower} to {self.time_range.upper}]"
+
+    class Meta:
+        required_db_vendor = "postgresql"
+        ordering = ["-created_at"]

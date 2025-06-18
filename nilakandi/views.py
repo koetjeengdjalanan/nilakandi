@@ -15,18 +15,31 @@ from .helper.serve_data import SubsData
 
 def home(request):
     from nilakandi.forms import ReportForm
+    from nilakandi.models import GeneratedReports as GeneratedReportsModel
 
     print(request.user)
     data = {
         "user": "Admin",
-        "countTable": [
-            {
-                "subsId": str(sub.subscription_id),
-                "name": sub.display_name,
-                "marketplace": sub.marketplace_set.count(),
-                "service": sub.services_set.count(),
-            }
-            for sub in SubscriptionsModel.objects.all()
+        "headers": [
+            "Data Source",
+            "Subscription",
+            "Report Type",
+            "Status",
+            "Time Range",
+            "Created At",
+        ],
+        "datas": [
+            [
+                gen.data_source,
+                gen.subscription.display_name,
+                gen.report_type,
+                gen.status,
+                f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
+                gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            ]
+            for gen in GeneratedReportsModel.objects.filter(deleted=False).order_by(
+                "-created_at"
+            )[:10]
         ],
         "lastAdded": MarketplacesModel.objects.order_by("-added").first(),
         "form": ReportForm(),
@@ -102,12 +115,9 @@ def marketplace(request):
 def reports(request):
     from datetime import datetime
 
-    from nilakandi.helper.report_generation import marketplaces as marketplacesReport
-    from nilakandi.helper.report_generation import services as servicesReport
-    from nilakandi.helper.report_generation import summary as summaryReport
-    from nilakandi.helper.report_generation import (
-        virtual_machine as virtualmachinesReport,
-    )
+    from nilakandi.models import GeneratedReports as GeneratedReportsModel
+    from nilakandi.models import GenerationStatusEnum
+    from nilakandi.tasks import make_report
 
     decimal_count = request.POST.get("decimal_count", 8)
     start_date = datetime.strptime(request.POST.get("from_date"), "%Y-%m-%d").date()
@@ -115,43 +125,107 @@ def reports(request):
     subscription = SubscriptionsModel.objects.get(
         subscription_id=request.POST.get("subscription")
     )
-    data = {}
-    match request.POST.get("report_type"):
-        case "summary":
-            page_title = "Summary Report"
-            pivot = df_tohtml(
-                df=summaryReport(start_date, end_date),
-                decimal=decimal_count,
-            )
-        case "services":
-            page_title = f"{subscription.display_name} - Services Report"
-            pivot = df_tohtml(
-                df=servicesReport(
-                    subscription=subscription, start_date=start_date, end_date=end_date
-                ),
-                decimal=decimal_count,
-            )
-        case "marketplaces":
-            page_title = f"{subscription.display_name} - Marketplaces Report"
-            pivot = df_tohtml(
-                marketplacesReport(
-                    subscription=subscription, start_date=start_date, end_date=end_date
-                ),
-                decimal=decimal_count,
-            )
-        case "virtualmachines":
-            page_title = f"{subscription.display_name} - Virtual Machines Report"
-            pivot = df_tohtml(
-                virtualmachinesReport(
-                    subscription=subscription, start_date=start_date, end_date=end_date
-                ),
-                decimal=decimal_count,
-            )
-        case _:
-            return redirect("home")
-    data["pivot"] = pivot
-    data["page_title"] = page_title
-    return render(request, "blank.html", context=data)
+
+    task = make_report.delay(
+        report_type=request.POST.get("report_type"),
+        decimal_count=int(decimal_count),
+        start_date=start_date,
+        end_date=end_date,
+        subscription_id=subscription.subscription_id,
+        source=request.POST.get("data_source", "db"),
+    )
+    gen_report = GeneratedReportsModel.objects.create(
+        id=task.id,
+        data_source=request.POST.get("data_source", "db"),
+        subscription=subscription,
+        report_type=request.POST.get("report_type"),
+        report_data={},
+        status=GenerationStatusEnum.IN_PROGRESS,
+        time_range=(start_date, end_date),
+    )
+    gen_report.save()
+    return redirect(
+        "view_report",
+        id=task.id,
+    )
+
+
+@require_http_methods(["POST"])
+def get_report(request):
+    import logging
+
+    from django.core.cache import cache
+
+    from nilakandi.models import GeneratedReports as GeneratedReportsModel
+    from nilakandi.models import GenerationStatusEnum
+
+    id = request.POST.get("id")
+    if not id:
+        return JsonResponse(
+            data={"error": "Report ID is required."},
+            status=400,
+        )
+    data = {
+        "id": id,
+        "status": GenerationStatusEnum.IN_PROGRESS.value,
+        "page_title": None,
+        "pivot": None,
+    }
+    report_cache = cache.get(id)
+    if (
+        isinstance(report_cache, dict)
+        and report_cache.get("page_title", None) is not None
+        and report_cache.get("pivot", None) is not None
+    ):
+        data["page_title"] = report_cache.get("page_title")
+        data["pivot"] = report_cache.get("pivot")
+        data["status"] = GenerationStatusEnum.COMPLETED.value
+        return JsonResponse(data=data, status=200)
+    elif (
+        not isinstance(report_cache, dict)
+        and GeneratedReportsModel.objects.filter(id=id).first().status
+        == GenerationStatusEnum.COMPLETED.value
+    ):
+        report = GeneratedReportsModel.objects.filter(id=id).first().report_data
+        cache.set(
+            key=id,
+            value={
+                "page_title": report.get("page_title"),
+                "pivot": report.get("pivot"),
+            },
+            timeout=60 * 60 * 24,
+        )
+        data["page_title"] = (report.get("page_title"),)
+        data["pivot"] = report.get("pivot")
+        data["status"] = GenerationStatusEnum.COMPLETED.value
+        return JsonResponse(data=data, status=200)
+    elif (
+        GeneratedReportsModel.objects.filter(id=id).first().status
+        == GenerationStatusEnum.IN_PROGRESS.value
+    ):
+        data["status"] = GenerationStatusEnum.IN_PROGRESS.value
+        return JsonResponse(
+            data=data,
+            status=202,
+        )
+    elif (
+        GeneratedReportsModel.objects.filter(id=id).first().status
+        == GenerationStatusEnum.FAILED.value
+    ):
+        gen_report = GeneratedReportsModel.objects.filter(id=id).first()
+        gen_report.deleted = True
+        gen_report.save()
+        # raise ValueError(
+        #     f"Report generation failed for ID {id}. Please check the logs for more details."
+        # )
+        logging.getLogger("nilakandi.tasks").info("Report generation failed.")
+        return JsonResponse(data=data, status=500)
+    logging.getLogger("nilakandi.tasks").info("Report ID not found or invalid.")
+    return JsonResponse(data=data, status=500)
+
+
+def view_report(request, id):
+    return render(request, "blank.html", context={"id": id})
 
 
 def summary(request):

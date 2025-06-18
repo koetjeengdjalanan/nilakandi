@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}
-  Home Page
+  Nilakandi - Home Page
 {% endblock title %}
 {% block content %}
   <div class="container">
@@ -8,56 +8,24 @@
     <p>Welcome to the home page of Nilakandi.</p>
     <hr />
     <h2>Generate Report</h2>
-    <form class="row" method="post" action="{% url 'reports' %}">
-      {% csrf_token %}
-        <div class="row my-2">
-          <div class="col-md-6 col-sm-12">
-            <label for="{{ form.subscription.id_for_label }}">{{ form.subscription.label }}</label>
-            {{ form.subscription }}
-          </div>
-          <div class="col-md-6 col-sm-12">
-            <label for="{{ form.report_type.id_for_label }}">{{ form.report_type.label }}</label>
-            {{ form.report_type }}
-          </div>
-        </div>
-      <div class="row my-2">
-        <div class="col-md-5 col-sm-6">
-          <label for="{{ form.from_date.id_for_label }}">{{ form.from_date.label }}</label>
-          {{ form.from_date }}
-        </div>
-        <div class="col-md-5 col-sm-6">
-          <label for="{{ form.to_date.id_for_label }}">{{ form.to_date.label }}</label>
-          {{ form.to_date }}
-        </div>
-        <div class="col-md-2 col-sm-12">
-          <label for="{{ form.decimal_count.id_for_label }}">{{ form.decimal_count.label }}</label>
-          {{ form.decimal_count }}
-        </div>
-      </div>
-      <div class="row my-2">
-        <div class="d-flex justify-content-end">
-          <button type="submit" class="btn btn-primary">Generate</button>
-        </div>
-      </div>
-  </form>
+    {% include "partials/generate_report_form.html" %}
     <hr class="my-4" />
     <h2>Count of Data By Subscription</h2>
+    {% comment %} {{ headers }} {% endcomment %}
     <table class="table table-striped">
       <thead>
         <tr>
-          <th scope="col">Display Name</th>
-          <th scope="col">Services</th>
-          <th scope="col">Marketplace</th>
+          {% for head in headers %}
+            <th scope="col">{{ head }}</th>
+          {% endfor %}
         </tr>
       </thead>
       <tbody>
-        {% for item in countTable %}
+        {% for data in datas %}
           <tr>
-            <td>
-              <a href="{% url 'subscription details' item.subsId %}">{{ item.name }}</a>
-            </td>
-            <td>{{ item.service }}</td>
-            <td>{{ item.marketplace }}</td>
+            {% for item in data %}
+              <td>{{ item }}</td>
+            {% endfor %}
           </tr>
         {% endfor %}
       </tbody>

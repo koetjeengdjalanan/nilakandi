@@ -4,6 +4,7 @@ from functools import wraps
 from uuid import UUID
 
 from celery import current_task, shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from dateutil.relativedelta import relativedelta
 
 from nilakandi.azure.api.costexport import ExportHistory, ExportOrCreate
@@ -341,6 +342,11 @@ def process_blob(
         )
         blobs.collected_blob_data = [BlobsInfo(**blob_info)]
         blobs.import_blobs_from_manifest()
+    except SoftTimeLimitExceeded as e:
+        logging.getLogger("nilakandi.tasks").warning(
+            f"Soft time limit exceeded for processing blob {blob_info['name']} in subscription {subscription_id}. Retrying..."
+        )
+        raise self.retry(exc=e, countdown=60)
     except Exception as e:
         logging.getLogger("nilakandi.tasks").error(
             f"Error fetching blob for subscription {subscription_id}: {e}",
@@ -348,3 +354,93 @@ def process_blob(
         )
         raise self.retry(exc=e, countdown=60)
     return blobs.total_imported
+
+
+@shared_task(
+    name="nilakandi.tasks.make_report",
+    bind=True,
+    max_retries=5,
+    default_retry_delay=60,
+)
+def make_report(
+    self,
+    report_type: str,
+    decimal_count: int,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    subscription_id: UUID,
+    source: str = "db",
+) -> dict[str, any]:
+    """
+    Generate a report based on the specified parameters and update its status in the database.
+
+    This method retrieves subscription data, updates the status of a generated report to 'IN_PROGRESS',
+    then attempts to gather report data. If successful, it updates the report status to 'SUCCESS' and
+    returns report metadata. If an error occurs, it logs the error, updates the report status to 'FAILED',
+    and re-raises the exception.
+
+    Parameters:
+        report_type (str): The type of report to generate.
+        decimal_count (int): Number of decimal places to use in numeric values.
+        start_date (datetime.date): The start date for the report period.
+        end_date (datetime.date): The end date for the report period.
+        subscription_id (UUID): The unique identifier for the subscription.
+        source (str, optional): Data source to use for report generation. Defaults to "db".
+
+    Returns:
+        dict[str, any]: A dictionary containing:
+            - 'page_title': The title for the report.
+            - 'time_range': A tuple of (start_date, end_date).
+
+    Raises:
+        Exception: Any exception that occurs during report generation is logged and re-raised.
+    """
+    from django.core.cache import cache
+
+    from nilakandi.helper.report_source_select import gather_data
+    from nilakandi.models import GeneratedReports as GeneratedReportsModel
+    from nilakandi.models import GenerationStatusEnum
+
+    subscription = SubscriptionsModel.objects.get(subscription_id=subscription_id)
+    generated_report = GeneratedReportsModel.objects.get(id=self.request.id)
+    generated_report.status = GenerationStatusEnum.IN_PROGRESS.value
+    generated_report.save()
+    try:
+        page_title, pivot = gather_data(
+            report_type=report_type,
+            decimal_count=decimal_count,
+            start_date=start_date,
+            end_date=end_date,
+            subscription=subscription,
+            source=source,
+        )
+        logging.getLogger("nilakandi.tasks").info(
+            f"Generated report for {subscription.display_name} from {start_date} to {end_date}"
+        )
+        generated_report.status = GenerationStatusEnum.COMPLETED.value
+        generated_report.report_data = {
+            "pivot": pivot,
+            "page_title": page_title,
+        }
+        logging.getLogger("nilakandi.tasks").info(
+            f"database updated for {subscription.display_name} report {self.request.id}"
+        )
+        generated_report.save()
+        cache.set(
+            key=self.request.id,
+            value={"page_title": page_title, "pivot": pivot},
+            timeout=86400,
+        )
+        return {
+            "page_title": page_title,
+            "time_range": (start_date, end_date),
+        }
+    except Exception as e:
+        logging.getLogger("nilakandi.tasks").error(
+            f"Error generating report for subscription {subscription_id}: {e}",
+            exc_info=True,
+        )
+        generated_report.status = GenerationStatusEnum.FAILED.value
+        generated_report.report_data = {"error": str(e)}
+        generated_report.save()
+        raise e
