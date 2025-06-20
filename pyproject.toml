@@ -37,6 +37,7 @@ black = "^25.1.0"
 ruff = "^0.9.9"
 ipython = "^9.0.1"
 djlint = "^1.36.4"
+django-debug-toolbar = "^5.2.0"
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.8"

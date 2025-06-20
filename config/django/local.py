@@ -34,3 +34,12 @@ STORAGES["azures-storages"] = {
         "azure_container": env("AZURE_STORAGE_CONTAINER", default="nilakandi"),
     },
 }
+
+if DEBUG:
+    import socket
+
+    INSTALLED_APPS.append("debug_toolbar")
+    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+    INTERNAL_IPS = ["127.0.0.1"] + [
+        (ip[:-1] + "1") for ip in socket.gethostbyname_ex(socket.gethostname())[2]
+    ]

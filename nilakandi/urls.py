@@ -1,6 +1,6 @@
 from django.urls import include, path
 
-from . import views
+from . import apis, views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -16,7 +16,6 @@ urlpatterns = [
         "reports/",
         include(
             [
-                path("", views.reports, name="reports"),
                 path("<uuid:id>/", views.view_report, name="view_report"),
                 path("summary/", views.summary, name="summary"),
                 path("services/", views.services_report, name="services report"),
@@ -33,5 +32,14 @@ urlpatterns = [
             ]
         ),
     ),
-    path("api/", include([path("get_report", views.get_report, name="get_report")])),
+    path(
+        "api/",
+        include(
+            [
+                path("reports/", apis.reports, name="reports"),
+                path("get_report/", apis.get_report, name="get_report"),
+                path("upload_report/", apis.upload_report, name="upload_report"),
+            ]
+        ),
+    ),
 ]

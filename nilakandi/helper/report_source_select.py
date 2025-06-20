@@ -15,8 +15,13 @@ def gather_data(
     end_date: datetime.date,
     subscription: SubscriptionsModel,
     source: str = "db",
+    file_list: list[str] = [],
 ) -> tuple[str, str]:
-    from nilakandi.helper.report_generation import db_source_switch, grab_from_azure
+    from nilakandi.helper.report_generation import (
+        byof_source_switch,
+        db_source_switch,
+        grab_from_azure,
+    )
 
     match source:
         case "azure":
@@ -25,6 +30,13 @@ def gather_data(
                 subscription=subscription,
                 start_date=start_date,
                 end_date=end_date,
+            )
+        case "byof":
+            if file_list.__len__() == 0:
+                raise ValueError("File list cannot be empty for BYOF source.")
+            data = byof_source_switch(
+                report_type=report_type,
+                file_paths=file_list,
             )
         case _:
             data = db_source_switch(

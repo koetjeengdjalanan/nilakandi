@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from typing import Dict
 
@@ -44,45 +45,20 @@ def _min_max_dates(
     return start_date, end_date
 
 
-def grab_from_azure(
-    report_type: str,
-    subscription,
-    start_date=None,
-    end_date=None,
-):
+def byof_source_switch(report_type: str, file_paths: list[str]):
+    import os
     from io import StringIO
 
     from caseutil import to_snake
-    from django.core.files.storage import storages
-    from psycopg2.extras import DateTimeTZRange
-
-    from nilakandi.models import ExportHistory as ExportHistoryModel
-
-    if report_type not in COLUMN_STACKS:
-        raise ValueError("Invalid report type provided")
-
-    data_source = storages["azures-storages"]
-    start_date, end_date = _min_max_dates(start_date, end_date)
-
-    q_args = {
-        "report_datetime_range__contained_by": DateTimeTZRange(start_date, end_date)
-    }
-    if report_type != "summary":
-        q_args["subscription"] = subscription.pk
-    files_path = ExportHistoryModel.objects.filter(**q_args).values_list(
-        "blobs_path", flat=True
-    )
-
-    list_of_raw_data = [
-        (file, data_source.size(file))
-        for path in files_path
-        for file in data_source.listdir(path)[1]
-        if file.endswith(".csv")
-    ]
 
     res = []
-    for file, _ in list_of_raw_data:
-        with data_source.open(file, "rb") as raw:
+    files = file_paths[0] if isinstance(file_paths[0], list) else file_paths
+    for file in files:
+        if not file.endswith(".csv"):
+            raise ValueError(
+                f"Invalid file format: {file}. Only CSV files are allowed."
+            )
+        with open(file, "rb") as raw:
             try:
                 df = pd.read_csv(
                     StringIO(raw.read().decode("utf-8")),
@@ -104,11 +80,25 @@ def grab_from_azure(
             if not df.empty:
                 df.columns = [to_snake(col) for col in df.columns]
                 res.append(df)
-
-    if not res:
+    if res.__len__() == 0:
         return pd.DataFrame()
 
-    df_concated = pd.concat(res, ignore_index=True)
+    processed_df = process_csv_file(res, report_type)
+    for file in files:
+        try:
+            os.remove(file)
+        except OSError as e:
+            logging.getLogger("nilakandi.tasks").error(
+                f"Error deleting file {file}: {e}"
+            )
+
+    return processed_df
+
+
+def process_csv_file(
+    input_dataframes: list[pd.DataFrame], report_type: str
+) -> pd.DataFrame:
+    df_concated = pd.concat(input_dataframes, ignore_index=True)
     if "cost_in_billing_currency" in df_concated.columns:
         df_concated.rename(
             columns={"cost_in_billing_currency": "total_cost"}, inplace=True
@@ -166,6 +156,131 @@ def grab_from_azure(
     if not final_cols:
         raise KeyError(f"No columns found for report type {report_type}")
     return df_concated[final_cols]
+
+
+def grab_from_azure(
+    report_type: str,
+    subscription,
+    start_date=None,
+    end_date=None,
+):
+    from io import StringIO
+
+    from caseutil import to_snake
+    from django.core.files.storage import storages
+    from psycopg2.extras import DateTimeTZRange
+
+    from nilakandi.models import ExportHistory as ExportHistoryModel
+
+    if report_type not in COLUMN_STACKS:
+        raise ValueError("Invalid report type provided")
+
+    data_source = storages["azures-storages"]
+    start_date, end_date = _min_max_dates(start_date, end_date)
+
+    q_args = {
+        "report_datetime_range__contained_by": DateTimeTZRange(start_date, end_date)
+    }
+    if report_type != "summary":
+        q_args["subscription"] = subscription.pk
+    files_path = ExportHistoryModel.objects.filter(**q_args).values_list(
+        "blobs_path", flat=True
+    )
+
+    list_of_raw_data = [
+        (file, data_source.size(file))
+        for path in files_path
+        for file in data_source.listdir(path)[1]
+        if file.endswith(".csv")
+    ]
+
+    res: list[pd.DataFrame] = []
+    for file, _ in list_of_raw_data:
+        with data_source.open(file, "rb") as raw:
+            try:
+                df = pd.read_csv(
+                    StringIO(raw.read().decode("utf-8")),
+                    parse_dates=[
+                        "Date",
+                        "BillingPeriodStartDate",
+                        "BillingPeriodEndDate",
+                    ],
+                    date_format="%m/%d/%Y",
+                    cache_dates=True,
+                    engine="python",
+                    encoding="utf-8",
+                    sep=r',(?=(?:[^"]*"[^"]*")*[^"]*$)',
+                    quotechar='"',
+                    on_bad_lines="error",
+                )
+            except Exception:
+                raise
+            if not df.empty:
+                df.columns = [to_snake(col) for col in df.columns]
+                res.append(df)
+
+    if not res:
+        return pd.DataFrame()
+
+    return process_csv_file(res, report_type)
+    # df_concated = pd.concat(res, ignore_index=True)
+    # if "cost_in_billing_currency" in df_concated.columns:
+    #     df_concated.rename(
+    #         columns={"cost_in_billing_currency": "total_cost"}, inplace=True
+    #     )
+
+    # for col in ("billing_period_start_date", "billing_period_end_date"):
+    #     if col not in df_concated.columns:
+    #         raise KeyError(f"{col} column missing in data")
+    # df_concated = df_concated[
+    #     df_concated["billing_period_start_date"].notnull()
+    #     & df_concated["billing_period_end_date"].notnull()
+    # ]
+
+    # cols = df_concated.columns
+    # if report_type == "summary":
+    #     pass
+    # elif report_type == "services":
+    #     if "meter_category" not in cols:
+    #         raise KeyError("meter_category column missing")
+    #     mcat = df_concated["meter_category"].astype(str)
+    #     df_concated = df_concated[~mcat.str.contains("Unassigned", na=False)]
+    # elif report_type == "marketplaces":
+    #     if "publisher_type" not in cols:
+    #         raise KeyError("publisher_type column missing")
+    #     pub = df_concated["publisher_type"].astype(str)
+    #     df_concated = df_concated[pub.str.lower() == "marketplace"]
+    # elif report_type == "virtualmachines":
+    #     for col in ("meter_category", "resource_id", "additional_info"):
+    #         if col not in cols:
+    #             raise KeyError(f"{col} column missing")
+    #     mcat = df_concated["meter_category"].astype(str)
+    #     df_concated = df_concated[
+    #         ~mcat.str.contains("Microsoft Defender for Cloud", case=False, na=False)
+    #     ]
+    #     rid = df_concated["resource_id"].astype(str)
+    #     df_concated = df_concated[
+    #         rid.str.contains(
+    #             r"microsoft\.compute/virtualmachines|microsoft\.compute/disks",
+    #             case=False,
+    #             na=False,
+    #             regex=True,
+    #         )
+    #     ]
+    #     df_concated = df_concated.assign(
+    #         vm_sku=df_concated["additional_info"].map(
+    #             lambda x: x.get("ServiceType") if isinstance(x, dict) else None
+    #         )
+    #     )
+    # else:
+    #     raise ValueError("Invalid report type provided")
+
+    # final_cols = [
+    #     col for col in COLUMN_STACKS[report_type] if col in df_concated.columns
+    # ]
+    # if not final_cols:
+    #     raise KeyError(f"No columns found for report type {report_type}")
+    # return df_concated[final_cols]
 
 
 def db_source_switch(

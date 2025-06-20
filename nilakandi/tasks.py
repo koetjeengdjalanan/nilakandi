@@ -370,6 +370,7 @@ def make_report(
     end_date: datetime.date,
     subscription_id: UUID,
     source: str = "db",
+    file_list: list[str] = [],
 ) -> dict[str, any]:
     """
     Generate a report based on the specified parameters and update its status in the database.
@@ -413,6 +414,7 @@ def make_report(
             end_date=end_date,
             subscription=subscription,
             source=source,
+            file_list=file_list,
         )
         logging.getLogger("nilakandi.tasks").info(
             f"Generated report for {subscription.display_name} from {start_date} to {end_date}"

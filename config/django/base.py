@@ -143,8 +143,10 @@ STORAGES = {
 
 STATIC_URL = "/blobs/"
 STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "assets"),
     os.path.join(BASE_DIR, env("AZURE_REPORT_DOWNLOAD_DIR", default="azure-reports")),
 ]
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

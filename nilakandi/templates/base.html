@@ -1,3 +1,5 @@
+{% load static %}
+{% load django_bootstrap5 %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -5,11 +7,17 @@
     <meta name="description" content="Azure Report Automation">
     <title>
       {% block title %}
-      Nilakandi
+        Nilakandi
       {% endblock title %}
     </title>
-    <link rel="icon" type="image/png" href="https://www.global.ntt/wp-content/themes/globalntt/img/favicon/favicon.png" sizes="192x192">
-    {% load django_bootstrap5 %}
+    <link rel="icon"
+          type="image/png"
+          href="https://www.global.ntt/wp-content/themes/globalntt/img/favicon/favicon.png"
+          sizes="192x192">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/dropzone.min.css' %}">
+    <script src="{% static 'js/dropzone.min.js' %}"></script>
+    <script src="{% static 'js/script.js' %}"></script>
     {% bootstrap_css %}
     {% bootstrap_javascript %}
     <script src="https://unpkg.com/htmx.org@2.0.4"
@@ -26,20 +34,4 @@
     {% block content %}
     {% endblock content %}
   </body>
-  <style>
-    .tab-content {
-      display: flex;
-    }
-
-    .tab-content > .tab-pane {
-      display: block; /* undo "display: none;" */
-      visibility: hidden;
-      margin-right: -100%;
-      width: 100%;
-    }
-
-    .tab-content > .active {
-      visibility: visible;
-    }
-  </style>
 </html>
