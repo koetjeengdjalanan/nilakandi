@@ -38,6 +38,7 @@ class Command(BaseCommand):
         def finishing():
             logging.getLogger("django").info("📡 Starting the server...")
             try:
+                call_command("collectstatic", interactive=False, verbosity=0, link=True)
                 call_command("runserver", "0.0.0.0:21180")
             except KeyboardInterrupt:
                 logging.getLogger("django").critical("☠️ Application terminated.")

@@ -21,7 +21,7 @@
       </div>
     </div>
     <div class="row">
-      <div class="container mt-5">
+      <div class="container my-5">
         <div class="card">
           <div class="card-body">
             <h2>BYOF - Bring Your Own File</h2>
@@ -72,7 +72,7 @@
     </div>
     <hr class="my-4" />
     <h2>Report Generation History</h2>
-    <table class="table table-striped">
+    <table class="table table-hover">
       <thead>
         <tr>
           {% for head in headers %}<th scope="col">{{ head }}</th>{% endfor %}
@@ -80,8 +80,13 @@
       </thead>
       <tbody>
         {% for data in datas %}
-          <tr>
-            {% for item in data %}<td>{{ item }}</td>{% endfor %}
+          <tr style="cursor: pointer;" onclick="window.location='{{ data.url }}'">
+            <td>{{ data.data_source }}</td>
+            <td>{{ data.subscription }}</td>
+            <td>{{ data.report_type }}</td>
+            <td>{{ data.status }}</td>
+            <td>{{ data.time_range }}</td>
+            <td>{{ data.created_at }}</td>
           </tr>
         {% endfor %}
       </tbody>

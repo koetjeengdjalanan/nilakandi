@@ -28,14 +28,15 @@ def home(request):
             "Created At",
         ],
         "datas": [
-            [
-                gen.data_source,
-                gen.subscription.display_name,
-                gen.report_type,
-                gen.status,
-                f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
-                gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            ]
+            {
+                "url": f"reports/{gen.id}",
+                "data_source": gen.data_source,
+                "subscription": gen.subscription.display_name,
+                "report_type": gen.report_type,
+                "status": gen.status,
+                "time_range": f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
+                "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            }
             for gen in GeneratedReportsModel.objects.filter(deleted=False).order_by(
                 "-created_at"
             )[:10]

@@ -119,11 +119,13 @@ def process_csv_file(
         if "meter_category" not in cols:
             raise KeyError("meter_category column missing")
         mcat = df_concated["meter_category"].astype(str)
+        df_concated["month"] = df_concated["billing_period_end_date"].copy()
         df_concated = df_concated[~mcat.str.contains("Unassigned", na=False)]
     elif report_type == "marketplaces":
         if "publisher_type" not in cols:
             raise KeyError("publisher_type column missing")
         pub = df_concated["publisher_type"].astype(str)
+        df_concated["month"] = df_concated["billing_period_end_date"].copy()
         df_concated = df_concated[pub.str.lower() == "marketplace"]
     elif report_type == "virtualmachines":
         for col in ("meter_category", "resource_id", "additional_info"):
@@ -474,11 +476,13 @@ def marketplaces(source: pd.DataFrame) -> pd.DataFrame:
 
 
 def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
+    from re import sub
+
     # helper to extract tag value
     def extract_tag_value(tags, key: str) -> str:
         if isinstance(tags, str):
             try:
-                return tags.split(f'"{key}": "')[1].split('"')[0]
+                return sub(r'"+', '"', tags).split(f'"{key}": "')[1].split('"')[0]
             except IndexError:
                 return None
         return None

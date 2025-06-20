@@ -103,3 +103,8 @@ td {
     justify-content: center;
     background-color: #f9f9f9;
 }
+
+.report-table {
+    white-space: nowrap;
+    overflow-x: auto;
+}

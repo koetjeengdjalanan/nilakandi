@@ -155,7 +155,9 @@ def df_tohtml(df: pd.DataFrame, decimal: int = 16) -> str:
         df.style.format(
             lambda x: f"{x:,.{decimal}f}".rstrip("0").rstrip("."), na_rep="n/a"
         )
-        .set_table_attributes(attributes='class="table table-striped"')
+        .set_table_attributes(
+            attributes='class="table table-striped table-hover report-table"'
+        )
         .set_table_styles(
             table_styles=[
                 {
