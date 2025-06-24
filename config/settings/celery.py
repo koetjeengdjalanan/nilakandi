@@ -3,6 +3,7 @@ from __future__ import absolute_import, unicode_literals
 import os
 
 from celery import Celery
+from kombu import Exchange, Queue
 
 from config.env import BASE_DIR, env
 
@@ -11,6 +12,20 @@ env.read_env(os.path.join(BASE_DIR, ".env"))
 
 app = Celery("config")
 app.config_from_object("django.conf:settings", namespace="CELERY")
+app.conf.task_queues = (
+    Queue("priority", Exchange("priority"), routing_key="priority"),
+    Queue("default", Exchange("default"), routing_key="default"),
+)
+app.conf.task_default_queue = "default"
+app.conf.task_default_exchange = "default"
+app.conf.task_default_routing_key = "default"
+
+app.conf.task_routes = {
+    "nilakandi.tasks.make_report": {
+        "queue": "priority",
+        "routing_key": "priority",
+    },
+}
 app.autodiscover_tasks()
 
 # Broker settings

@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 from django.apps import apps as django_apps
@@ -38,8 +39,16 @@ class Command(BaseCommand):
         def finishing():
             logging.getLogger("django").info("📡 Starting the server...")
             try:
-                call_command("collectstatic", interactive=False, verbosity=0, link=True)
-                call_command("runserver", "0.0.0.0:21180")
+                call_command("collectstatic", interactive=False, verbosity=0)
+                gunicorn_args = [
+                    "gunicorn",
+                    "--bind",
+                    "0.0.0.0:21180",
+                    "--workers",
+                    "4",
+                    "config.wsgi:application",
+                ]
+                os.execvp("gunicorn", gunicorn_args)
             except KeyboardInterrupt:
                 logging.getLogger("django").critical("☠️ Application terminated.")
                 exit(1)

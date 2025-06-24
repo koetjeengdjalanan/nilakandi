@@ -16,7 +16,7 @@ services:
       - "21180:21180"
     volumes:
       - ../.env:/app/.env:ro
-      - azure-reports:/app/azure-reports
+      - azure-reports:/app/staticfiles/azure-reports
     networks:
       - nilakandi-net
     depends_on:
@@ -47,11 +47,11 @@ services:
       dockerfile: .docker/web/Dockerfile
     restart: on-failure:5
     user: arjuna
-    command: poetry run celery -A config.settings worker --loglevel=info -E --pool=gevent --autoscale=200,6
+    command: poetry run celery -A config.settings worker --loglevel=info -E --pool=gevent --autoscale=200,6 -Q priority,default
     tty: true
     volumes:
       - ../.env:/app/.env:ro
-      - azure-reports:/app/azure-reports
+      - azure-reports:/app/staticfiles/azure-reports
     networks:
       - nilakandi-net
     depends_on:
