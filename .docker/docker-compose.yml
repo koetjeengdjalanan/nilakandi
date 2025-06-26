@@ -16,6 +16,7 @@ services:
       - "21180:21180"
     volumes:
       - ../.env:/app/.env:ro
+      - ../gunicorn.conf.py:/app/gunicorn.conf.py:ro
       - azure-reports:/app/staticfiles/azure-reports
       - temp-uploads:/tmp
     networks:

@@ -129,38 +129,61 @@ def get_report(request: HttpRequest):
 
 @require_http_methods(["POST"])
 def upload_report(request: HttpRequest):
+    import logging
     import tempfile
 
-    report_type = request.POST.get("report_type")
-    if not report_type:
-        return JsonResponse(
-            data={"message": "The 'report_type' is required."}, status=400
+    logger = logging.getLogger("nilakandi.pull")
+
+    try:
+        report_type = request.POST.get("report_type")
+        if not report_type:
+            return JsonResponse(
+                data={"message": "The 'report_type' is required."}, status=400
+            )
+
+        uploaded_files = request.FILES.values()
+        if not uploaded_files:
+            return JsonResponse(data={"message": "No files were uploaded."}, status=400)
+
+        # Check file sizes (warn if > 100MB)
+        total_size = sum(file.size for file in uploaded_files)
+        logger.info(
+            f"Processing {len(uploaded_files)} files, total size: {total_size / (1024*1024):.2f}MB"
         )
 
-    uploaded_files = request.FILES.values()
-    if not uploaded_files:
-        return JsonResponse(data={"message": "No files were uploaded."}, status=400)
+        if total_size > 536870912:  # 512MB
+            return JsonResponse(
+                data={"message": "Total file size exceeds 512MB limit."}, status=413
+            )
 
-    paths = []
-    for file in uploaded_files:
-        file_name = file.name.replace(" ", "_")
-        with tempfile.NamedTemporaryFile(
-            delete=False, prefix="nilakandi_raw-", suffix=f"_{file_name}"
-        ) as temp_file:
-            for chunk in file.chunks():
-                temp_file.write(chunk)
-            paths.append(temp_file.name)
+        paths = []
+        for file in uploaded_files:
+            file_name = file.name.replace(" ", "_")
+            logger.info(
+                f"Processing file: {file_name} ({file.size / (1024*1024):.2f}MB)"
+            )
 
-    data = request
-    data.POST = request.POST.copy()
-    data.POST["report_type"] = report_type
-    data.POST["decimal_count"] = request.POST.get("decimal_count", 8)
-    data.POST["data_source"] = "byof"
-    data.POST["file_list"] = paths
+            with tempfile.NamedTemporaryFile(
+                delete=False, prefix="nilakandi_raw-", suffix=f"_{file_name}"
+            ) as temp_file:
+                for chunk in file.chunks():
+                    temp_file.write(chunk)
+                paths.append(temp_file.name)
 
-    response = reports(request=data)
+        data = request
+        data.POST = request.POST.copy()
+        data.POST["report_type"] = report_type
+        data.POST["decimal_count"] = request.POST.get("decimal_count", 8)
+        data.POST["data_source"] = "byof"
+        data.POST["file_list"] = paths
 
-    if hasattr(response, "url"):
-        return JsonResponse({"redirect_url": response.url})
+        response = reports(request=data)
 
-    return response
+        if hasattr(response, "url"):
+            return JsonResponse({"redirect_url": response.url})
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Upload error: {e}", exc_info=True)
+        return JsonResponse(data={"message": f"Upload failed: {str(e)}"}, status=500)

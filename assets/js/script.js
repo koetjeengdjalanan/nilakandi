@@ -9,13 +9,16 @@ document.addEventListener("DOMContentLoaded", function () {
             url: dropzoneElement.getAttribute("action"),
             paramName: "file",
             uploadMultiple: true,
-            parallelUploads: 32,
+            parallelUploads: 2,  // Reduced for large files
             autoProcessQueue: false,
             addRemoveLinks: true,
+            maxFilesize: 512,  // 512MB per file
+            timeout: 900000,   // 15 minutes timeout
             headers: {
                 "x-csrftoken": csrfToken,
             },
-            dictDefaultMessage: "Drop files here or click to upload",
+            dictDefaultMessage: "Drop files here or click to upload (Max: 512MB per file)",
+            dictFileTooBig: "File is too big ({{filesize}}MB). Max filesize: {{maxFilesize}}MB.",
         });
 
         byofDropZone.on("successmultiple", function (files, response) {

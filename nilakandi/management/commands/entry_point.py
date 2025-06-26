@@ -42,10 +42,8 @@ class Command(BaseCommand):
                 call_command("collectstatic", interactive=False, verbosity=0)
                 gunicorn_args = [
                     "gunicorn",
-                    "--bind",
-                    "0.0.0.0:21180",
-                    "--workers",
-                    "4",
+                    "--config",
+                    "/app/gunicorn.conf.py",  # Assumes gunicorn.conf.py is in the project root
                     "config.wsgi:application",
                 ]
                 os.execvp("gunicorn", gunicorn_args)

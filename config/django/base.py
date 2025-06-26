@@ -41,12 +41,14 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_bootstrap5",
+    "corsheaders",
     "nilakandi",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -155,6 +157,36 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 TENACITY_MAX_RETRY: int = env("TENACITY_MAX_RETRY", default=10)
+
+# File upload settings for large files (0.5GB)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 536870912  # 512MB (0.5GB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 536870912  # 512MB (0.5GB)
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+FILE_UPLOAD_TEMP_DIR = "/tmp"
+FILE_UPLOAD_PERMISSIONS = 0o644
+
+# CORS settings for staging server (IP access, no SSL)
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
+# Security settings for staging (HTTP only)
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
 
 from config.settings.azure import *  # noqa: E402, F403
 from config.settings.celery import *  # noqa: E402, F403
