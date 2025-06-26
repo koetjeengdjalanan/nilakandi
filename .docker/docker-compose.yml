@@ -17,6 +17,7 @@ services:
     volumes:
       - ../.env:/app/.env:ro
       - azure-reports:/app/staticfiles/azure-reports
+      - temp-uploads:/tmp
     networks:
       - nilakandi-net
     depends_on:
@@ -52,6 +53,7 @@ services:
     volumes:
       - ../.env:/app/.env:ro
       - azure-reports:/app/staticfiles/azure-reports
+      - temp-uploads:/tmp
     networks:
       - nilakandi-net
     depends_on:
@@ -97,3 +99,5 @@ volumes:
       type: none
       device: /mnt/mydisk/azure-reports
       o: bind,rw
+  temp-uploads:
+    driver: local
