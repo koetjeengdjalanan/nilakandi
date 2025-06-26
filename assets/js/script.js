@@ -5,19 +5,20 @@ document.addEventListener("DOMContentLoaded", function () {
     const dropzoneElement = document.querySelector("#byof-dropzone");
 
     if (dropzoneElement) {
+        const submitButton = document.getElementById("byof-submit-button");
         const byofDropZone = new Dropzone("#byof-dropzone", {
             url: dropzoneElement.getAttribute("action"),
             paramName: "file",
             uploadMultiple: true,
-            parallelUploads: 2,  // Reduced for large files
+            parallelUploads: 6,
             autoProcessQueue: false,
             addRemoveLinks: true,
-            maxFilesize: 512,  // 512MB per file
-            timeout: 900000,   // 15 minutes timeout
+            maxFilesize: 512,
+            timeout: 900000,
             headers: {
                 "x-csrftoken": csrfToken,
             },
-            dictDefaultMessage: "Drop files here or click to upload (Max: 512MB per file)",
+            dictDefaultMessage: "Drop files here or click to upload (Max: 512MB per file @ 6 files max)",
             dictFileTooBig: "File is too big ({{filesize}}MB). Max filesize: {{maxFilesize}}MB.",
         });
 
@@ -58,9 +59,11 @@ document.addEventListener("DOMContentLoaded", function () {
             if (subsriptionIdElement) {
                 formData.append('subscription', subsriptionIdElement.value);
             }
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
         });
 
-        const submitButton = document.getElementById("byof-submit-button");
         if (submitButton) {
             submitButton.addEventListener("click", function () {
                 const reportTypeElement = document.getElementById('byof_report_type');

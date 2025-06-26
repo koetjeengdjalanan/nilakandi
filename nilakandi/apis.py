@@ -141,7 +141,7 @@ def upload_report(request: HttpRequest):
                 data={"message": "The 'report_type' is required."}, status=400
             )
 
-        uploaded_files = request.FILES.values()
+        uploaded_files = list(request.FILES.values())
         if not uploaded_files:
             return JsonResponse(data={"message": "No files were uploaded."}, status=400)
 

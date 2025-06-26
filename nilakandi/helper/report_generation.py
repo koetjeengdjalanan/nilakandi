@@ -3,6 +3,7 @@ from datetime import date
 from typing import Dict
 
 import pandas as pd
+from caseutil import to_camel
 from django.db.models import Max, Min, Sum
 from django.db.models.functions import TruncMonth
 
@@ -152,11 +153,16 @@ def process_csv_file(
     else:
         raise ValueError("Invalid report type provided")
 
-    final_cols = [
-        col for col in COLUMN_STACKS[report_type] if col in df_concated.columns
+    required_cols = COLUMN_STACKS[report_type]
+    missing_cols = [
+        to_camel(col) for col in required_cols if col not in df_concated.columns
     ]
-    if not final_cols:
-        raise KeyError(f"No columns found for report type {report_type}")
+    if missing_cols:
+        raise ValueError(
+            f"Missing required columns for {report_type} report: {', '.join(missing_cols)}"
+        )
+
+    final_cols = list(required_cols)
     return df_concated[final_cols]
 
 
