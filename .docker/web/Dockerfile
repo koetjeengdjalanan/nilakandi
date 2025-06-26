@@ -27,6 +27,9 @@ RUN useradd -G root -u $UID -d /home/$USER $USER
 RUN mkdir -p /home/$USER/.local/bin $DOCUMENT_ROOT $LOG_DIRECTORY
 RUN chown -R $USER:$USER /home/$USER $DOCUMENT_ROOT $LOG_DIRECTORY
 
+# Create directories for volumes and set proper permissions
+RUN mkdir -p /app/staticfiles/azure-reports /tmp && chown -R $USER:$USER /app/staticfiles /tmp
+
 # Change User & WorkDir
 WORKDIR $DOCUMENT_ROOT
 USER $USER
