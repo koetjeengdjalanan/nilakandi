@@ -8,26 +8,41 @@ from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
 
 from .helper.azure_api import Auth, Services, Subscriptions
+from .helper.miscellaneous import df_tohtml
 from .helper.serve_data import SubsData
-
-# Create your views here.
 
 
 def home(request):
+    from nilakandi.forms import ReportForm
+    from nilakandi.models import GeneratedReports as GeneratedReportsModel
+
     print(request.user)
     data = {
         "user": "Admin",
-        "countTable": [
+        "headers": [
+            "Data Source",
+            "Subscription",
+            "Report Type",
+            "Status",
+            "Time Range",
+            "Created At",
+        ],
+        "datas": [
             {
-                "subsId": str(sub.subscription_id),
-                "name": sub.display_name,
-                "marketplace": sub.marketplace_set.count(),
-                "service": sub.services_set.count(),
+                "url": f"reports/{gen.id}",
+                "data_source": gen.data_source,
+                "subscription": gen.subscription.display_name,
+                "report_type": gen.report_type,
+                "status": gen.status,
+                "time_range": f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
+                "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             }
-            for sub in SubscriptionsModel.objects.all()
+            for gen in GeneratedReportsModel.objects.filter(deleted=False).order_by(
+                "-created_at"
+            )[:10]
         ],
         "lastAdded": MarketplacesModel.objects.order_by("-added").first(),
-        # .added.strftime("%Y-%m-%d %H:%M:%S"),
+        "form": ReportForm(),
     }
     return render(request=request, template_name="home.html", context=data)
 
@@ -43,13 +58,6 @@ def subscriptions(request):
 
 
 def subscription_details(request, subsId):
-    def toHtml(data) -> str:
-        if data.empty:
-            return "<pre>No Data</pre>"
-        return data.to_html(
-            classes="table table-striped", float_format="{:,.8f}".format, na_rep="n/a"
-        )
-
     try:
         sub = SubscriptionsModel.objects.get(subscription_id=subsId)
     except SubscriptionsModel.DoesNotExist:
@@ -59,8 +67,8 @@ def subscription_details(request, subsId):
     data = {
         "subsName": sub.display_name,
         "pivotTable": {
-            "Services": toHtml(serveData.service()),
-            "Marketplaces": toHtml(serveData.marketplace()),
+            "Services": df_tohtml(serveData.service()),
+            "Marketplaces": df_tohtml(serveData.marketplace()),
         },
     }
     return render(request=request, template_name="subsreport.html", context=data)
@@ -93,12 +101,70 @@ def getSubcriptions(request):
 
 
 def testAPI(request):
-    subs = SubscriptionsModel.objects.all()
-    print(subs.values())
-    return JsonResponse({"data": [sub.display_name for sub in subs]}, safe=False)
+    print(request)
+    return JsonResponse({"data": "ok", "req": request.POST})
 
 
 def marketplace(request):
     subs = SubscriptionsModel.objects.all()
     for sub in subs:
         sub.objects.marketplace
+
+
+def view_report(request, id):
+    return render(request, "blank.html", context={"id": id})
+
+
+def summary(request):
+    from nilakandi.helper.report_generation import summary as summaryReport
+
+    print(type(request))
+    print(request)
+    decimal_count = 0
+    if request.method == "POST":
+        decimal_count = int(request.POST.get("decimal_count", 8))
+    data = {
+        "pivot": df_tohtml(
+            df=summaryReport(), decimal=decimal_count if decimal_count else 16
+        ),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def services_report(request):
+    from nilakandi.helper.report_generation import services as servicesReport
+
+    data = {
+        "pivot": df_tohtml(servicesReport()),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def marketplaces_report(request):
+    from nilakandi.helper.report_generation import marketplaces as marketplacesReport
+
+    data = {
+        "pivot": df_tohtml(marketplacesReport()),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def virtualmachines_report(request):
+    from nilakandi.helper.report_generation import (
+        virtual_machine as virtualmachinesReport,
+    )
+
+    data = {
+        "pivot": df_tohtml(virtualmachinesReport()),
+    }
+    return render(request, "blank.html", context=data)
+
+
+def testForms(request):
+    from nilakandi.forms import ReportForm
+
+    form = ReportForm()
+    data = {
+        "form": form,
+    }
+    return render(request, "testform.html", context=data)

@@ -1,29 +1,92 @@
 {% extends "base.html" %}
 {% block title %}
-  Home Page
+  Nilakandi - Home Page
 {% endblock title %}
 {% block content %}
   <div class="container">
     <h1>Home Page</h1>
     <p>Welcome to the home page of Nilakandi.</p>
     <hr />
-    <h2>Count of Data By Subscription</h2>
-    <table class="table table-striped">
+    <h2>Generate Report</h2>
+    {% include "partials/generate_report_form.html" %}
+    <div class="d-flex">
+      <div class="p-2 flex-grow-1 align-self-center">
+        <hr />
+      </div>
+      <div class="p-2 align-self-center">
+        <h5>or</h5>
+      </div>
+      <div class="p2 flex-grow-1 align-self-center">
+        <hr />
+      </div>
+    </div>
+    <div class="row">
+      <div class="container my-5">
+        <div class="card">
+          <div class="card-body">
+            <h2>BYOF - Bring Your Own File</h2>
+            <p>
+              Drag and drop files into the box below or click to select files. Click the "Upload Files" button to start the process.
+            </p>
+            <form action="{% url 'upload_report' %}"
+                  class="dropzone"
+                  id="byof-dropzone">
+              {% csrf_token %}
+            </form>
+            <div class="d-flex my-2 justify-content-center">
+              <div class="mx-2">
+                <select name="subscription"
+                        class="form-select"
+                        required=""
+                        id="byof_subscription">
+                  <option value="" selected="">-- Select Subscription --</option>
+                  <option value="5c5108fc-b32a-490e-a0c8-e6bdfc225067">PowerApps SML</option>
+                  <option value="5b765b14-6df2-4233-a20f-47c8d2385264">Corporate Apps and Infra</option>
+                  <option value="8605edf7-311b-479d-9555-bbd93995e017">PT Aplikasi Kota Pintar</option>
+                  <option value="ad9b481b-2617-471e-a8be-858c59df4550">Smart Building</option>
+                  <option value="933f12e3-999c-485f-a611-608c5c4e3557">SML Data Platform</option>
+                  <option value="8bdfa958-50ec-40b6-9a60-5f34d7359591">Smart City</option>
+                </select>
+              </div>
+              <div class="mx-2">
+                <select name="report_type"
+                        class="form-select"
+                        required=""
+                        id="byof_report_type">
+                  <option value="" selected="">-- Select Report Type --</option>
+                  <option value="summary">Summary</option>
+                  <option value="services">Services</option>
+                  <option value="marketplaces">Marketplaces</option>
+                  <option value="virtualmachines">Virtual Machines</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary mx-2" id="byof-submit-button">Submit</button>
+            </div>
+            <div class="progress my-2">
+              <div class="progress-bar progress-bar-striped progress-bar-animated"
+                   id="total-progress-bar">0%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <hr class="my-4" />
+    <h2>Report Generation History</h2>
+    <table class="table table-hover">
       <thead>
         <tr>
-          <th scope="col">Display Name</th>
-          <th scope="col">Services</th>
-          <th scope="col">Marketplace</th>
+          {% for head in headers %}<th scope="col">{{ head }}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>
-        {% for item in countTable %}
-          <tr>
-            <td>
-              <a href="{% url 'subscription details' item.subsId %}">{{ item.name }}</a>
-            </td>
-            <td>{{ item.service }}</td>
-            <td>{{ item.marketplace }}</td>
+        {% for data in datas %}
+          <tr style="cursor: pointer;" onclick="window.location='{{ data.url }}'">
+            <td>{{ data.data_source }}</td>
+            <td>{{ data.subscription }}</td>
+            <td>{{ data.report_type }}</td>
+            <td>{{ data.status }}</td>
+            <td>{{ data.time_range }}</td>
+            <td>{{ data.created_at }}</td>
           </tr>
         {% endfor %}
       </tbody>

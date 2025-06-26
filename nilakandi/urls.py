@@ -1,5 +1,6 @@
-from django.urls import path
-from . import views
+from django.urls import include, path
+
+from . import apis, views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -11,4 +12,34 @@ urlpatterns = [
     ),
     path("services/", views.services, name="services"),
     path("testAPI/", views.testAPI, name="testAPI"),
+    path(
+        "reports/",
+        include(
+            [
+                path("<uuid:id>/", views.view_report, name="view_report"),
+                path("summary/", views.summary, name="summary"),
+                path("services/", views.services_report, name="services report"),
+                path(
+                    "marketplaces/",
+                    views.marketplaces_report,
+                    name="marketplaces report",
+                ),
+                path(
+                    "virtualmachines/",
+                    views.virtualmachines_report,
+                    name="virtualmachines report",
+                ),
+            ]
+        ),
+    ),
+    path(
+        "api/",
+        include(
+            [
+                path("reports/", apis.reports, name="reports"),
+                path("get_report/", apis.get_report, name="get_report"),
+                path("upload_report/", apis.upload_report, name="upload_report"),
+            ]
+        ),
+    ),
 ]

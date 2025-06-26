@@ -16,10 +16,24 @@ services:
       - db
       - redis
 
+  flower:
+    hostname: Dev-Nilakandi-flower
+    container_name: Dev-Nilakandi-flower
+    image: mher/flower:0.9.7
+    command: ["flower", "--broker=redis://Dev-Nilakandi-redis:6379/0", "--port=5555"]
+    ports:
+      - 21155:5555
+    networks:
+      - Dev-nilakandi-net
+    depends_on:
+      - redis
+    environment:
+      - FLOWER_BASIC_AUTH=admin:admin123
+
   db:
     hostname: Dev-Nilakandi-db
     container_name: Dev-Nilakandi-db
-    image: postgres:13
+    image: postgres:16
     volumes:
       - Dev-nilakandi-db-data:/var/lib/postgresql/data
     environment:
@@ -46,4 +60,6 @@ networks:
 
 volumes:
   Dev-nilakandi-db-data:
+    driver: local
+  minio-data:
     driver: local
