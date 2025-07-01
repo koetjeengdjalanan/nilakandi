@@ -70,11 +70,11 @@ def byof_source_switch(report_type: str, file_paths: list[str]):
                     ],
                     date_format="%m/%d/%Y",
                     cache_dates=True,
-                    engine="python",
+                    engine="c",
                     encoding="utf-8",
-                    sep=r',(?=(?:[^"]*"[^"]*")*[^"]*$)',
                     quotechar='"',
                     on_bad_lines="error",
+                    low_memory=False,
                 )
             except Exception:
                 raise
@@ -99,6 +99,8 @@ def byof_source_switch(report_type: str, file_paths: list[str]):
 def process_csv_file(
     input_dataframes: list[pd.DataFrame], report_type: str
 ) -> pd.DataFrame:
+    import json
+
     df_concated = pd.concat(input_dataframes, ignore_index=True)
     if "cost_in_billing_currency" in df_concated.columns:
         df_concated.rename(
@@ -145,9 +147,20 @@ def process_csv_file(
                 regex=True,
             )
         ]
+        df_concated["additional_info"] = df_concated["additional_info"].apply(
+            lambda x: (
+                x
+                if isinstance(x, dict)
+                else (
+                    json.loads(x[1:-1].replace('""', '"'))
+                    if isinstance(x, str) and x.startswith('"') and x.endswith('"')
+                    else (json.loads(x) if isinstance(x, str) else {})
+                )
+            )
+        )
         df_concated = df_concated.assign(
             vm_sku=df_concated["additional_info"].map(
-                lambda x: x.get("ServiceType") if isinstance(x, dict) else None
+                lambda x: x.get("ServiceType", None) if isinstance(x, dict) else None
             )
         )
     else:
