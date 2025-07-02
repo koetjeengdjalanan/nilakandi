@@ -244,64 +244,6 @@ def grab_from_azure(
         return pd.DataFrame()
 
     return process_csv_file(res, report_type)
-    # df_concated = pd.concat(res, ignore_index=True)
-    # if "cost_in_billing_currency" in df_concated.columns:
-    #     df_concated.rename(
-    #         columns={"cost_in_billing_currency": "total_cost"}, inplace=True
-    #     )
-
-    # for col in ("billing_period_start_date", "billing_period_end_date"):
-    #     if col not in df_concated.columns:
-    #         raise KeyError(f"{col} column missing in data")
-    # df_concated = df_concated[
-    #     df_concated["billing_period_start_date"].notnull()
-    #     & df_concated["billing_period_end_date"].notnull()
-    # ]
-
-    # cols = df_concated.columns
-    # if report_type == "summary":
-    #     pass
-    # elif report_type == "services":
-    #     if "meter_category" not in cols:
-    #         raise KeyError("meter_category column missing")
-    #     mcat = df_concated["meter_category"].astype(str)
-    #     df_concated = df_concated[~mcat.str.contains("Unassigned", na=False)]
-    # elif report_type == "marketplaces":
-    #     if "publisher_type" not in cols:
-    #         raise KeyError("publisher_type column missing")
-    #     pub = df_concated["publisher_type"].astype(str)
-    #     df_concated = df_concated[pub.str.lower() == "marketplace"]
-    # elif report_type == "virtualmachines":
-    #     for col in ("meter_category", "resource_id", "additional_info"):
-    #         if col not in cols:
-    #             raise KeyError(f"{col} column missing")
-    #     mcat = df_concated["meter_category"].astype(str)
-    #     df_concated = df_concated[
-    #         ~mcat.str.contains("Microsoft Defender for Cloud", case=False, na=False)
-    #     ]
-    #     rid = df_concated["resource_id"].astype(str)
-    #     df_concated = df_concated[
-    #         rid.str.contains(
-    #             r"microsoft\.compute/virtualmachines|microsoft\.compute/disks",
-    #             case=False,
-    #             na=False,
-    #             regex=True,
-    #         )
-    #     ]
-    #     df_concated = df_concated.assign(
-    #         vm_sku=df_concated["additional_info"].map(
-    #             lambda x: x.get("ServiceType") if isinstance(x, dict) else None
-    #         )
-    #     )
-    # else:
-    #     raise ValueError("Invalid report type provided")
-
-    # final_cols = [
-    #     col for col in COLUMN_STACKS[report_type] if col in df_concated.columns
-    # ]
-    # if not final_cols:
-    #     raise KeyError(f"No columns found for report type {report_type}")
-    # return df_concated[final_cols]
 
 
 def db_source_switch(
@@ -586,14 +528,10 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
     df.resource_group = df.resource_group.str.upper()
     df.vm_name = df.vm_name.str.upper()
 
-    df.vm_sku = df.groupby(["vm_name", "resource_group", "description"])[
-        "vm_sku"
-    ].transform(
+    df.vm_sku = df.groupby(["vm_name"])["vm_sku"].transform(
         lambda x: x.dropna().mode().iloc[0] if not x.dropna().mode().empty else None
     )
-    df.pic_owner = df.groupby(["vm_name", "resource_group", "description"])[
-        "pic_owner"
-    ].transform(
+    df.pic_owner = df.groupby(["vm_name"])["pic_owner"].transform(
         lambda x: x.dropna().mode().iloc[0] if not x.dropna().mode().empty else None
     )
     df.fillna(
