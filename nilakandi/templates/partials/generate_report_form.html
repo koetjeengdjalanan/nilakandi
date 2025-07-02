@@ -1,0 +1,36 @@
+<form class="row" method="post" action="{% url 'reports' %}">
+    {% csrf_token %}
+    <div class="row my-2">
+        <div class="col-md-4 col-sm-12">
+            <label for="{{ form.data_source.id_for_label }}">{{ form.data_source.label }}</label>
+            {{ form.data_source }}
+        </div>
+        <div class="col-md-4 col-sm-12">
+            <label for="{{ form.subscription.id_for_label }}">{{ form.subscription.label }}</label>
+            {{ form.subscription }}
+        </div>
+        <div class="col-md-4 col-sm-12">
+            <label for="{{ form.report_type.id_for_label }}">{{ form.report_type.label }}</label>
+            {{ form.report_type }}
+        </div>
+    </div>
+    <div class="row my-2">
+        <div class="col-md-5 col-sm-6">
+            <label for="{{ form.from_date.id_for_label }}">{{ form.from_date.label }}</label>
+            {{ form.from_date }}
+        </div>
+        <div class="col-md-5 col-sm-6">
+            <label for="{{ form.to_date.id_for_label }}">{{ form.to_date.label }}</label>
+            {{ form.to_date }}
+        </div>
+        <div class="col-md-2 col-sm-12">
+            <label for="{{ form.decimal_count.id_for_label }}">{{ form.decimal_count.label }}</label>
+            {{ form.decimal_count }}
+        </div>
+    </div>
+    <div class="row my-2">
+        <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary">Generate</button>
+        </div>
+    </div>
+</form>

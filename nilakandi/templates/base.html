@@ -1,3 +1,5 @@
+{% load static %}
+{% load django_bootstrap5 %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -8,19 +10,23 @@
         Nilakandi
       {% endblock title %}
     </title>
-    {% load django_bootstrap5 %}
+    <link rel="icon"
+          type="image/png"
+          href="https://www.global.ntt/wp-content/themes/globalntt/img/favicon/favicon.png"
+          sizes="192x192">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/dropzone.min.css' %}">
+    <script src="{% static 'js/dropzone.min.js' %}"></script>
+    <script src="{% static 'js/script.js' %}"></script>
     {% bootstrap_css %}
     {% bootstrap_javascript %}
+    <script src="https://unpkg.com/htmx.org@2.0.4"
+            integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+            crossorigin="anonymous"></script>
   </head>
   <body>
     {% include "navbar.html" %}
-    {% comment %} <div class="container">
-      <br />
-      <br />
-      <br />
-    </div> {% endcomment %}
     {% block content %}
     {% endblock content %}
   </body>
 </html>
-

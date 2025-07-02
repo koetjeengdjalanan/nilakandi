@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime as dt
 from datetime import time, timedelta
@@ -6,7 +7,8 @@ from typing import Iterable
 from zoneinfo import ZoneInfo
 
 import requests
-from azure.identity import ClientSecretCredential
+from azure.core.credentials import AccessToken
+from azure.identity import ClientSecretCredential, TokenCachePersistenceOptions
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.consumption import ConsumptionManagementClient
 from azure.mgmt.consumption.models import MarketplacesListResult
@@ -21,9 +23,10 @@ from azure.mgmt.costmanagement.models import (
     QueryTimePeriod,
 )
 from azure.mgmt.subscription import SubscriptionClient
+from config.django.base import TIME_ZONE
+from django.core.cache import cache
 from pandas import DataFrame
 
-from config.django.base import TIME_ZONE
 from nilakandi.models import Marketplace as MarketplacesModel
 from nilakandi.models import Services as ServicesModel
 from nilakandi.models import Subscription as SubscriptionsModel
@@ -38,6 +41,8 @@ class Auth:
     Azure API Authentication class
     """
 
+    CACHE_KEY: str = "nilakandi-azure-token"
+
     def __init__(self, client_id: str, tenant_id: str, client_secret: str) -> None:
         """Class Initializer
 
@@ -46,6 +51,9 @@ class Auth:
             tenant_id (str): Tenant Id
             client_secret (str): Password for the API User
         """
+        token_caching = TokenCachePersistenceOptions(
+            allow_unencrypted_storage=True, name=self.CACHE_KEY
+        )
         self.client_id = client_id
         self.tenant_id = tenant_id
         self.client_secret = client_secret
@@ -53,8 +61,38 @@ class Auth:
             tenant_id=self.tenant_id,
             client_id=self.client_id,
             client_secret=self.client_secret,
+            cache_persistence_options=token_caching,
         )
-        self.token = self.credential.get_token("https://management.azure.com/.default")
+        self.token = self._get_token()
+
+    def _fetch_token(self) -> AccessToken:
+        token = self.credential.get_token("https://management.azure.com/.default")
+        token_data = {
+            "access_token": token.token,
+            "expires": token.expires_on,
+        }
+        cache.set(
+            key=self.CACHE_KEY,
+            value=json.dumps(token_data),
+            timeout=token.expires_on - dt.now().timestamp(),
+        )
+        return token
+
+    def _get_token(self) -> AccessToken:
+        json_token = cache.get(key=self.CACHE_KEY)
+        if not json_token or (json.loads(json_token)["expires"] < dt.now().timestamp()):
+            return self._fetch_token()
+        token = json.loads(json_token)
+        return AccessToken(token=token["access_token"], expires_on=token["expires"])
+
+    def __dict__(self) -> dict:
+        return {
+            "client_id": self.client_id,
+            "tenant_id": self.tenant_id,
+            "client_secret": self.client_secret,
+            "token": self.token[0],
+            "expires": self.token[1],
+        }
 
 
 class Services:
@@ -267,11 +305,11 @@ class Marketplaces:
         self,
         auth: Auth,
         subscription: SubscriptionsModel,
-        date: dt = dt.now(ZoneInfo(TIME_ZONE)),
+        date: dt | str = dt.now(ZoneInfo(TIME_ZONE)),
     ) -> None:
         self.auth: Auth = auth
         self.subscription: SubscriptionsModel = subscription
-        self.yearMonth: str = date.strftime("%Y%m")
+        self.yearMonth: str = date.strftime("%Y%m") if isinstance(date, dt) else date
 
     def get(self) -> "Marketplaces":
         """Get from Azure API
@@ -314,14 +352,7 @@ class Marketplaces:
 
         if self.res is None or not self.res:
             raise ValueError("No data to save")
-        # This is not best practice but it works and I am lazy
-        uniqueFields = [
-            "usage_start",
-            "instance_name",
-            "subscription_name",
-            "publisher_name",
-            "plan_name",
-        ]
+
         data: list[MarketplacesModel] = []
         for item in self.res:
             raw = item.as_dict() if hasattr(item, "as_dict") else vars(item)
@@ -361,14 +392,15 @@ class Marketplaces:
             MarketplacesModel.objects.bulk_create(
                 data,
                 batch_size=500,
-                ignore_conflicts=ignore_conflicts,
-                update_conflicts=update_conflicts,
-                unique_fields=uniqueFields,
-                update_fields=[
-                    col
-                    for col in MarketplacesModel._meta.get_fields()
-                    if col.name not in uniqueFields
-                ],
+                ignore_conflicts=True,
+                # update_conflicts=False,
+                # unique_fields=uniqueFields,
+                # update_fields=[
+                #     col
+                #     for col in MarketplacesModel._meta.get_fields()
+                #     if col.name not in uniqueFields
+                #     and col is not MarketplacesModel._meta.pk
+                # ],
             )
         else:
             MarketplacesModel.objects.bulk_create(
