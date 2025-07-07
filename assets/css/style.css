@@ -104,6 +104,11 @@ td {
     background-color: #f9f9f9;
 }
 
+#byof-dropzone.dz-drag-hover {
+    background-color: rgba(13, 110, 253, 0.3);
+    border-color: #0d6efd;
+}
+
 .report-table {
     white-space: nowrap;
     overflow-x: auto;

@@ -415,6 +415,7 @@ def make_report(
             subscription=subscription,
             source=source,
             file_list=file_list,
+            task_id=self.request.id,
         )
         logging.getLogger("nilakandi.tasks").info(
             f"Generated report for {subscription.display_name} from {start_date} to {end_date}"
@@ -430,7 +431,7 @@ def make_report(
         generated_report.save()
         cache.set(
             key=self.request.id,
-            value={"page_title": page_title, "pivot": pivot},
+            value={"page_title": page_title, "pivot": pivot, "status": "finish"},
             timeout=86400,
         )
         return {
@@ -445,4 +446,4 @@ def make_report(
         generated_report.status = GenerationStatusEnum.FAILED.value
         generated_report.report_data = {"error": str(e)}
         generated_report.save()
-        raise e
+        raise self.retry(exc=e, countdown=60)

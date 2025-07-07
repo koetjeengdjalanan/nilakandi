@@ -1,0 +1,64 @@
+<table class="table table-hover">
+    <thead>
+        <tr>
+            {% for head in headers %}<th scope="col">{{ head }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for data in datas %}
+            <tr style="cursor: pointer;" onclick="window.location='{{ data.url }}'">
+                <td>{{ data.data_source }}</td>
+                <td>{{ data.subscription }}</td>
+                <td>{{ data.report_type }}</td>
+                <td>{{ data.status }}</td>
+                <td>{{ data.time_range }}</td>
+                <td>{{ data.created_at }}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<nav aria-label="Historical Table Nav">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link"
+                   hx-get="{% url 'report_lists' %}"
+                   hx-target="#historical-report-container"
+                   hx-swap="innerHTML"
+                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ page_obj.previous_page_number }} }'>Previous</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Previous</span>
+            </li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+            {% if num == page_obj.number %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+            {% else %}
+                <li class="page-item">
+                    <a class="page-link"
+                       hx-get="{% url 'report_lists' %}"
+                       hx-target="#historical-report-container"
+                       hx-swap="innerHTML"
+                       hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ num }} }'>{{ num }}</a>
+                </li>
+            {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link"
+                   hx-get="{% url 'report_lists' %}"
+                   hx-target="#historical-report-container"
+                   hx-swap="innerHTML"
+                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ page_obj.next_page_number }} }'>Next</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Next</span>
+            </li>
+        {% endif %}
+    </ul>
+</nav>

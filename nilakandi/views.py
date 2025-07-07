@@ -16,7 +16,10 @@ def home(request):
     from nilakandi.forms import ReportForm
     from nilakandi.models import GeneratedReports as GeneratedReportsModel
 
-    print(request.user)
+    deleted: bool = request.GET.get("deleted", "false").lower() == "true"
+    gen_reports = GeneratedReportsModel.objects.order_by("-created_at")
+    if not deleted:
+        gen_reports = gen_reports.filter(deleted=False)
     data = {
         "user": "Admin",
         "headers": [
@@ -37,9 +40,7 @@ def home(request):
                 "time_range": f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
                 "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             }
-            for gen in GeneratedReportsModel.objects.filter(deleted=False).order_by(
-                "-created_at"
-            )[:10]
+            for gen in gen_reports[:10]
         ],
         "lastAdded": MarketplacesModel.objects.order_by("-added").first(),
         "form": ReportForm(),
@@ -109,6 +110,60 @@ def marketplace(request):
     subs = SubscriptionsModel.objects.all()
     for sub in subs:
         sub.objects.marketplace
+
+
+def historical_report(request):
+    from django.core.paginator import Paginator
+
+    from nilakandi.models import GeneratedReports as GeneratedReportsModel
+
+    gen_reports = GeneratedReportsModel.objects.order_by("-created_at")
+    deleted = request.GET.get("include_deleted", "false").lower() == "true"
+    gen_reports = gen_reports.filter(deleted=False) if not deleted else gen_reports
+    if (
+        request.GET.get("keyword", None) is not None
+        and request.GET.get("keyword", "").strip() != ""
+    ):
+        from django.contrib.postgres.search import SearchVector
+
+        keyword = request.GET.get("keyword", "").strip()
+        gen_reports = gen_reports.annotate(
+            search=SearchVector(
+                "data_source",
+                "subscription__display_name",
+                "report_type",
+                "time_range",
+                "created_at",
+            )
+        ).filter(search=keyword)
+    paginator = Paginator(gen_reports, 10)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    data = {
+        "page_obj": page_obj,
+        "deleted": deleted,
+        "headers": [
+            "Data Source",
+            "Subscription",
+            "Report Type",
+            "Status",
+            "Time Range",
+            "Created At",
+        ],
+        "datas": [
+            {
+                "url": f"reports/{gen.id}",
+                "data_source": gen.data_source,
+                "subscription": gen.subscription.display_name,
+                "report_type": gen.report_type,
+                "status": gen.status,
+                "time_range": f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
+                "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            for gen in page_obj.object_list
+        ],
+    }
+    return render(request, "partial/historical_report.html", context=data)
 
 
 def view_report(request, id):
