@@ -1,5 +1,5 @@
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID
 
 from nilakandi.helper.miscellaneous import df_tohtml
 from nilakandi.helper.report_generation import marketplaces as marketplacesReport
@@ -18,7 +18,7 @@ def gather_data(
     subscription: SubscriptionsModel,
     source: str = "db",
     file_list: list[str] = [],
-    task_id: uuid4 | None = None,
+    task_id: UUID | None = None,
 ) -> tuple[str, str]:
     from nilakandi.helper.report_generation import (
         byof_source_switch,
