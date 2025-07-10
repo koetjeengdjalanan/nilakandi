@@ -117,7 +117,7 @@ def process_csv_file(
 
     cols = df_concated.columns
     if report_type == "summary":
-        pass
+        df_concated["month"] = df_concated["billing_period_end_date"].copy()
     elif report_type == "services":
         if "meter_category" not in cols:
             raise KeyError("meter_category column missing")

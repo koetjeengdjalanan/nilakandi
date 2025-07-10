@@ -1,3 +1,5 @@
+{% load django_bootstrap5 %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -16,10 +18,9 @@
           type="image/png"
           href="https://www.global.ntt/wp-content/themes/globalntt/img/favicon/favicon.png"
           sizes="192x192">
-    {% load django_bootstrap5 %}
-    {% load static %}
     {% bootstrap_css %}
     {% bootstrap_javascript %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <script src="https://unpkg.com/htmx.org@2.0.4"
             integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
             crossorigin="anonymous"></script>
