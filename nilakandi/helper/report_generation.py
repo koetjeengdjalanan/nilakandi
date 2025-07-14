@@ -527,6 +527,25 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
 
     df.resource_group = df.resource_group.str.upper()
     df.vm_name = df.vm_name.str.upper()
+    only_details = (
+        df[
+            [
+                "vm_name",
+                "billing_period_end_date",
+                "resource_group",
+                "description",
+                "marvel_workstream",
+                "marvel_project",
+                "pic_owner",
+                "vm_sku",
+            ]
+        ]
+        .sort_values(by=["billing_period_end_date"])
+        .groupby("vm_name")
+        .last()
+        .reset_index()
+        .fillna("-")
+    )
 
     df.vm_sku = df.groupby(["vm_name"])["vm_sku"].transform(
         lambda x: x.dropna().mode().iloc[0] if not x.dropna().mode().empty else None
@@ -534,7 +553,11 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
     df.pic_owner = df.groupby(["vm_name"])["pic_owner"].transform(
         lambda x: x.dropna().mode().iloc[0] if not x.dropna().mode().empty else None
     )
-    df.fillna(
+    dfcopy = df.copy()
+    dfcopy = dfcopy.join(
+        only_details.set_index("vm_name"), on="vm_name", rsuffix="_details"
+    )
+    dfcopy.fillna(
         {
             "vm_name": "-",
             "resource_group": "-",
@@ -548,31 +571,53 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
     )
 
     pivot = pd.pivot_table(
-        df,
+        dfcopy,
         values="total_cost",
         index=[
             "vm_name",
-            "resource_group",
-            "description",
-            "marvel_workstream",
-            "marvel_project",
-            "pic_owner",
-            "vm_sku",
+            "resource_group_details",
+            "description_details",
+            "marvel_workstream_details",
+            "marvel_project_details",
+            "pic_owner_details",
+            "vm_sku_details",
         ],
         columns=["month", "meter_category"],
         aggfunc="sum",
         margins=True,
         margins_name="Grand Total",
     )
-    # Place Grand Total columns at the end if they exist
-    if "Grand Total" in pivot.columns.get_level_values(0):
-        grand_total_cols = pivot.xs("Grand Total", axis=1, level=0, drop_level=False)
-        month_cols = pivot.drop("Grand Total", axis=1, level=0).sort_index(
-            axis=1, level=0
-        )
-        pivot = pd.concat([month_cols, grand_total_cols], axis=1)
-    else:
-        pivot = pivot.sort_index(axis=1, level=0)
+
+    # Sub Totals Calculation
+    sub_totals = []
+    months = [
+        col
+        for col in pivot.columns.get_level_values(0).unique()
+        if col != "Grand Total"
+    ]
+    for month in months:
+        month_col = [col for col in pivot.columns if col[0] == month]
+        if month_col:
+            month_total = pivot[month_col].sum(axis=1)
+            sub_totals.append((month, "Sub Total", month_total))
+
+    for month, sub_total_name, sub_total in sub_totals:
+        pivot[(month, sub_total_name)] = sub_total
+
+    sorted_cols = []
+    for month in months:
+        month_cols = [
+            col for col in pivot.columns if col[0] == month and col[1] != "Sub Total"
+        ]
+        sorted_cols.extend(month_cols)
+        sub_total_col = (month, "Sub Total")
+        if sub_total_col in pivot.columns:
+            sorted_cols.append(sub_total_col)
+
+    grand_total_cols = [col for col in pivot.columns if col[0] == "Grand Total"]
+    sorted_cols.extend(grand_total_cols)
+
+    pivot = pivot[sorted_cols]
 
     pivot.columns = pd.MultiIndex.from_tuples(
         [
