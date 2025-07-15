@@ -36,10 +36,16 @@ STORAGES["azures-storages"] = {
 }
 
 if DEBUG:
-    import socket
-
+    # The order is important. The new middleware must come before CsrfViewMiddleware.
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("django.middleware.csrf.CsrfViewMiddleware"),
+        "nilakandi.middleware.ForceTemporaryFileUploadHandlerMiddleware",
+    )
     INSTALLED_APPS.append("debug_toolbar")
     MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
-    INTERNAL_IPS = ["127.0.0.1"] + [
-        (ip[:-1] + "1") for ip in socket.gethostbyname_ex(socket.gethostname())[2]
-    ]
+    INTERNAL_IPS = ["127.0.0.1"]
+    # tricks to have debug toolbar when developing with docker
+    import socket
+
+    hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
+    INTERNAL_IPS += [ip[:-1] + "1" for ip in ips]

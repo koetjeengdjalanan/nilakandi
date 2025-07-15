@@ -11,15 +11,31 @@ from nilakandi.models import ExportReport as ExportReportModel
 from nilakandi.models import Subscription as SubscriptionModel
 
 COLUMN_STACKS: Dict[str, tuple[str]] = {
-    "summary": ["subscription_name", "month", "publisher_type", "total_cost"],
+    "summary": [
+        "subscription_name",
+        "month",
+        "publisher_type",
+        "billing_period_end_date",
+        "billing_period_start_date",
+        "total_cost",
+    ],
     "services": [
         "meter_category",
         "meter_sub_category",
         "meter_name",
         "month",
         "total_cost",
+        "billing_period_end_date",
+        "billing_period_start_date",
     ],
-    "marketplaces": ["publisher_name", "plan_name", "month", "total_cost"],
+    "marketplaces": [
+        "publisher_name",
+        "plan_name",
+        "month",
+        "total_cost",
+        "billing_period_end_date",
+        "billing_period_start_date",
+    ],
     "virtualmachines": [
         "resource_name",
         "resource_group",
@@ -27,6 +43,7 @@ COLUMN_STACKS: Dict[str, tuple[str]] = {
         "meter_category",
         "resource_id",
         "billing_period_end_date",
+        "billing_period_start_date",
         "total_cost",
         "vm_sku",
     ],
@@ -46,7 +63,9 @@ def _min_max_dates(
     return start_date, end_date
 
 
-def byof_source_switch(report_type: str, file_paths: list[str]):
+def byof_source_switch(
+    report_type: str, file_paths: list[str], subscription_name: str | None = None
+):
     import os
     from io import StringIO
 
@@ -84,7 +103,7 @@ def byof_source_switch(report_type: str, file_paths: list[str]):
     if res.__len__() == 0:
         return pd.DataFrame()
 
-    processed_df = process_csv_file(res, report_type)
+    processed_df = process_csv_file(res, report_type, subscription_name)
     for file in files:
         try:
             os.remove(file)
@@ -97,11 +116,22 @@ def byof_source_switch(report_type: str, file_paths: list[str]):
 
 
 def process_csv_file(
-    input_dataframes: list[pd.DataFrame], report_type: str
+    input_dataframes: list[pd.DataFrame],
+    report_type: str,
+    subscription_name: str | None = None,
 ) -> pd.DataFrame:
     import json
 
     df_concated = pd.concat(input_dataframes, ignore_index=True)
+    if report_type != "summary":
+        if subscription_name is None and not isinstance(subscription_name, str):
+            raise ValueError("Subscription ID is required for non-summary reports.")
+        df_concated = df_concated[
+            df_concated.subscription_name.str.match(
+                subscription_name, case=False, na=False
+            )
+        ]
+
     if "cost_in_billing_currency" in df_concated.columns:
         df_concated.rename(
             columns={"cost_in_billing_currency": "total_cost"}, inplace=True

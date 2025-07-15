@@ -133,15 +133,10 @@ def upload_report(request: HttpRequest):
     import os
     import tempfile
 
-    from django.core.files.uploadhandler import TemporaryFileUploadHandler
-
     logger = logging.getLogger("nilakandi.pull")
     paths = []
 
     try:
-        # Force Django to use TemporaryFileUploadHandler for this request
-        request.upload_handlers = [TemporaryFileUploadHandler(request=request)]
-
         report_type = request.POST.get("report_type")
         if not report_type:
             return JsonResponse(
@@ -206,11 +201,3 @@ def upload_report(request: HttpRequest):
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
         return JsonResponse(data={"message": f"Upload failed: {str(e)}"}, status=500)
-    finally:
-        # Clean up any temporary files
-        for path in paths:
-            try:
-                if os.path.exists(path):
-                    os.unlink(path)
-            except Exception as clean_e:
-                logger.error(f"Failed to clean up temporary file {path}: {clean_e}")

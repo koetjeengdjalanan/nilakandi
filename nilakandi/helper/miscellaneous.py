@@ -172,3 +172,16 @@ def df_tohtml(df: pd.DataFrame, decimal: int = 16) -> str:
     )
     res = styled.to_html()
     return res
+
+
+def use_temporary_file_upload_handler(func):
+    from functools import wraps
+
+    from django.core.files.uploadhandler import TemporaryFileUploadHandler
+
+    @wraps(func)
+    def _wrap_api(request, *args, **kwargs):
+        request.upload_handlers = [TemporaryFileUploadHandler(request=request)]
+        return func(request, *args, **kwargs)
+
+    return _wrap_api

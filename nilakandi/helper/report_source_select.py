@@ -40,6 +40,7 @@ def gather_data(
             data = byof_source_switch(
                 report_type=report_type,
                 file_paths=file_list,
+                subscription_name=subscription.display_name,
             )
             if task_id is not None:
                 generated_report = GeneratedReportsModel.objects.get(id=task_id)
