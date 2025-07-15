@@ -130,11 +130,18 @@ def get_report(request: HttpRequest):
 @require_http_methods(["POST"])
 def upload_report(request: HttpRequest):
     import logging
+    import os
     import tempfile
 
+    from django.core.files.uploadhandler import TemporaryFileUploadHandler
+
     logger = logging.getLogger("nilakandi.pull")
+    paths = []
 
     try:
+        # Force Django to use TemporaryFileUploadHandler for this request
+        request.upload_handlers = [TemporaryFileUploadHandler(request=request)]
+
         report_type = request.POST.get("report_type")
         if not report_type:
             return JsonResponse(
@@ -145,7 +152,7 @@ def upload_report(request: HttpRequest):
         if not uploaded_files:
             return JsonResponse(data={"message": "No files were uploaded."}, status=400)
 
-        # Check file sizes (warn if > 100MB)
+        # Check file sizes
         total_size = sum(file.size for file in uploaded_files)
         logger.info(
             f"Processing {len(uploaded_files)} files, total size: {total_size / (1024*1024):.2f}MB"
@@ -156,19 +163,31 @@ def upload_report(request: HttpRequest):
                 data={"message": "Total file size exceeds 512MB limit."}, status=413
             )
 
-        paths = []
         for file in uploaded_files:
             file_name = file.name.replace(" ", "_")
             logger.info(
                 f"Processing file: {file_name} ({file.size / (1024*1024):.2f}MB)"
             )
 
-            with tempfile.NamedTemporaryFile(
-                delete=False, prefix="nilakandi_raw-", suffix=f"_{file_name}"
-            ) as temp_file:
-                for chunk in file.chunks():
-                    temp_file.write(chunk)
-                paths.append(temp_file.name)
+            # Instead of reading the file into memory, just use the path Django created
+            if hasattr(file, "temporary_file_path"):
+                temp_path = file.temporary_file_path()
+                # Create a new permanent temporary file to avoid cleanup by Django
+                with tempfile.NamedTemporaryFile(
+                    delete=False, prefix="nilakandi_raw-", suffix=f"_{file_name}"
+                ) as new_temp_file:
+                    # Copy file using operating system commands to avoid memory issues
+                    os.system(f"cp '{temp_path}' '{new_temp_file.name}'")
+                    paths.append(new_temp_file.name)
+            else:
+                # Fallback if file wasn't stored on disk
+                with tempfile.NamedTemporaryFile(
+                    delete=False, prefix="nilakandi_raw-", suffix=f"_{file_name}"
+                ) as temp_file:
+                    # Read and write in chunks to minimize memory usage
+                    for chunk in file.chunks(chunk_size=1024 * 1024):  # 1MB chunks
+                        temp_file.write(chunk)
+                    paths.append(temp_file.name)
 
         data = request
         data.POST = request.POST.copy()
@@ -187,3 +206,11 @@ def upload_report(request: HttpRequest):
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
         return JsonResponse(data={"message": f"Upload failed: {str(e)}"}, status=500)
+    finally:
+        # Clean up any temporary files
+        for path in paths:
+            try:
+                if os.path.exists(path):
+                    os.unlink(path)
+            except Exception as clean_e:
+                logger.error(f"Failed to clean up temporary file {path}: {clean_e}")
