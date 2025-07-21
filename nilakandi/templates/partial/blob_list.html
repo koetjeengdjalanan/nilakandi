@@ -1,0 +1,49 @@
+<div class="d-flex flex-column h-100" id="blob-selection-container">
+    <div class="my-3 d-flex flex-row" id="search-blob-container">
+        <input class="form-control flex-grow-1 me-2"
+               type="text"
+               name="search"
+               id="search-blob"
+               placeholder="Search blobs...">
+        <select name="subscription-select"
+                id="subscription-select-byof-azure-blobs"
+                class="form-select flex-shrink-1 me-2">
+            <option value="all">All Available on File</option>
+            {% for subscription in subscriptions %}<option value="{{ subscription }}">{{ subscription }}</option>{% endfor %}
+        </select>
+        <button type="submit"
+                class="btn btn-primary flex-shrink-1 me-2"
+                id="byof-azure-blobs-submit-button">Submit</button>
+    </div>
+    <div class="flex-grow-1 overflow-y-auto" id="blob-selection">
+        {% for blob in blobs %}
+            <div class="accordion my-2" id="{{ blob.container }}-container">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="{{ blob.container }}-heading">
+                        <button class="accordion-button"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#panelsStayOpen-{{ blob.container }}"
+                                aria-expanded="true"
+                                aria-controls="panelsStayOpen-{{ blob.container }}">{{ blob.container }}</button>
+                    </h2>
+                    <div id="panelsStayOpen-{{ blob.container }}"
+                         class="accordion-collapse collapse show">
+                        <div class="accordion-body">
+                            {% for file in blob.files %}
+                                <div class="form-check">
+                                    <input type="checkbox"
+                                           name="{{ blob.container }}_{{ file }}"
+                                           id="{{ blob.container }}_{{ file }}"
+                                           class="btn-check"
+                                           autocomplete="off">
+                                    <label for="{{ blob.container }}_{{ file }}" class="btn">{{ file }}</label>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>

@@ -223,3 +223,51 @@ def testForms(request):
         "form": form,
     }
     return render(request, "testform.html", context=data)
+
+
+def list_blobs_from_azure(request):
+    from nilakandi.helper.azure_api import Auth
+    from nilakandi.helper.azure_blob import Blobs
+
+    auth = Auth(
+        client_id=settings.AZURE_CLIENT_ID,
+        client_secret=settings.AZURE_CLIENT_SECRET,
+        tenant_id=settings.AZURE_TENANT_ID,
+    )
+    blobs = Blobs(
+        container_name="testcontainer",
+        auth=auth,
+        subscription=SubscriptionsModel.objects.first(),
+    )
+    containers = blobs.blob_service_client.list_containers(include_metadata=True)
+    blob_list: list[dict[str, str | list]] = []
+    for container in containers:
+        try:
+            container_name = container.get("name")
+            files = blobs.blob_service_client.get_container_client(
+                container=container_name
+            ).list_blobs()
+            blob_list.append(
+                {
+                    "container": container_name,
+                    "files": [
+                        doc.get("name")
+                        for doc in files
+                        if doc.get("name").endswith(".csv")
+                    ],
+                }
+            )
+            subscriptions = SubscriptionsModel.objects.values_list(
+                "display_name", flat=True
+            )
+        except Exception as e:
+            print(e)
+        finally:
+            continue
+    if len(blob_list) == 0:
+        return None
+    return render(
+        request,
+        "partial/blob_list.html",
+        context={"blobs": blob_list, "subscriptions": subscriptions},
+    )

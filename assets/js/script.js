@@ -81,4 +81,50 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         }
     }
+
+    const byofCard = document.getElementById("byof-card");
+    if (byofCard) {
+        const tabPanesForHeight = byofCard.querySelectorAll(".tab-content .tab-pane");
+        let maxHeight = 0;
+        tabPanesForHeight.forEach(function (pane) {
+            const height = pane.offsetHeight;
+            if (height > maxHeight) {
+                maxHeight = height;
+            }
+        });
+
+        if (maxHeight > 0) {
+            const allTabPanes = byofCard.querySelectorAll(".tab-pane");
+            allTabPanes.forEach(function (pane) {
+                pane.style.height = maxHeight + "px";
+            });
+        }
+        byofCard.addEventListener('keyup', function (event) {
+            if (event.target.id === 'search-blob') {
+                const searchTerm = event.target.value.toLowerCase();
+                const accordions = byofCard.querySelectorAll('#blob-selection .accordion');
+
+                accordions.forEach(accordion => {
+                    const files = accordion.querySelectorAll('.form-check');
+                    let accordionHasVisibleFiles = false;
+
+                    files.forEach(file => {
+                        const label = file.querySelector('label');
+                        if (label && label.textContent.toLowerCase().includes(searchTerm)) {
+                            file.style.display = '';
+                            accordionHasVisibleFiles = true;
+                        } else {
+                            file.style.display = 'none';
+                        }
+                    });
+
+                    if (accordionHasVisibleFiles) {
+                        accordion.style.display = '';
+                    } else {
+                        accordion.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
 });

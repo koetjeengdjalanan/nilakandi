@@ -23,98 +23,142 @@
     <div class="row">
       <div class="container my-2">
         <div class="card">
-          <div class="card-body">
+          <div class="card-body" id="byof-card">
             <h2>BYOF - Bring Your Own File</h2>
-            <p>
-              Drag and drop files into the box below or click to select files. Click the "Upload Files" button to start the process.
-            </p>
-            <form action="{% url 'upload_report' %}"
-                  class="dropzone"
-                  id="byof-dropzone">
-              {% csrf_token %}
-            </form>
-            <div class="d-flex my-2 justify-content-center">
-              <div class="mx-2">
-                <select name="subscription"
-                        class="form-select"
-                        required=""
-                        id="byof_subscription">
-                  <option value="" selected="">-- Select Subscription --</option>
-                  <option value="5c5108fc-b32a-490e-a0c8-e6bdfc225067">PowerApps SML</option>
-                  <option value="5b765b14-6df2-4233-a20f-47c8d2385264">Corporate Apps and Infra</option>
-                  <option value="8605edf7-311b-479d-9555-bbd93995e017">PT Aplikasi Kota Pintar</option>
-                  <option value="ad9b481b-2617-471e-a8be-858c59df4550">Smart Building</option>
-                  <option value="933f12e3-999c-485f-a611-608c5c4e3557">SML Data Platform</option>
-                  <option value="8bdfa958-50ec-40b6-9a60-5f34d7359591">Smart City</option>
-                </select>
+            <nav>
+              <div class="nav nav-tabs nav-justified" id="nav-tab" role="tablist">
+                <button class="nav-link active"
+                        id="byof-upload-tab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#byof-upload"
+                        type="button"
+                        role="tab"
+                        aria-controls="byof-upload"
+                        aria-selected="true">Upload</button>
+                <button class="nav-link"
+                        id="byof-browse-azure-tab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#byof-browse-azure"
+                        type="button"
+                        role="tab"
+                        aria-controls="byof-browse-azure"
+                        aria-selected="false">Azure</button>
               </div>
-              <div class="mx-2">
-                <select name="report_type"
-                        class="form-select"
-                        required=""
-                        id="byof_report_type">
-                  <option value="" selected="">-- Select Report Type --</option>
-                  <option value="summary">Summary</option>
-                  <option value="services">Services</option>
-                  <option value="marketplaces">Marketplaces</option>
-                  <option value="virtualmachines">Virtual Machines</option>
-                </select>
+            </nav>
+            <div class="tab-content" id="nav-tabContent">
+              <div class="tab-pane fade show active"
+                   id="byof-upload"
+                   role="tabpanel"
+                   aria-labelledby="byof-upload-tab"
+                   tabindex="0">
+                <p class="mt-2">
+                  Drag and drop files into the box below or click to select files. Click the "Upload Files" button to start the process.
+                </p>
+                <form action="{% url 'upload_report' %}"
+                      class="dropzone"
+                      id="byof-dropzone">
+                  {% csrf_token %}
+                </form>
+                <div class="d-flex my-2 justify-content-center">
+                  <div class="mx-2">
+                    <select name="subscription"
+                            class="form-select"
+                            required=""
+                            id="byof_subscription">
+                      <option value="" selected="">-- Select Subscription --</option>
+                      <option value="5c5108fc-b32a-490e-a0c8-e6bdfc225067">PowerApps SML</option>
+                      <option value="5b765b14-6df2-4233-a20f-47c8d2385264">Corporate Apps and Infra</option>
+                      <option value="8605edf7-311b-479d-9555-bbd93995e017">PT Aplikasi Kota Pintar</option>
+                      <option value="ad9b481b-2617-471e-a8be-858c59df4550">Smart Building</option>
+                      <option value="933f12e3-999c-485f-a611-608c5c4e3557">SML Data Platform</option>
+                      <option value="8bdfa958-50ec-40b6-9a60-5f34d7359591">Smart City</option>
+                    </select>
+                  </div>
+                  <div class="mx-2">
+                    <select name="report_type"
+                            class="form-select"
+                            required=""
+                            id="byof_report_type">
+                      <option value="" selected="">-- Select Report Type --</option>
+                      <option value="summary">Summary</option>
+                      <option value="services">Services</option>
+                      <option value="marketplaces">Marketplaces</option>
+                      <option value="virtualmachines">Virtual Machines</option>
+                    </select>
+                  </div>
+                  <button type="submit" class="btn btn-primary mx-2" id="byof-submit-button">Submit</button>
+                </div>
+                <div class="progress my-2">
+                  <div class="progress-bar progress-bar-striped progress-bar-animated"
+                       id="total-progress-bar">0%</div>
+                </div>
               </div>
-              <button type="submit" class="btn btn-primary mx-2" id="byof-submit-button">Submit</button>
-            </div>
-            <div class="progress my-2">
-              <div class="progress-bar progress-bar-striped progress-bar-animated"
-                   id="total-progress-bar">0%</div>
+              <div class="tab-pane fade"
+                   id="byof-browse-azure"
+                   role="tabpanel"
+                   aria-labelledby="byof-browse-azure-tab"
+                   tabindex="0"
+                   hx-get="{% url 'blob_list' %}"
+                   hx-trigger="load delay:250ms"
+                   hx-target="#byof-browse-azure"
+                   hx-swap="innerHTML">
+                <div class="d-flex flex-column justify-content-center align-items-center h-100 w-100 overflow-y-auto" id="byof-browse-azure-containers">
+                  <div class="spinner-grow text-secondary" role="status" aria-live="polite">
+                    <div class="visually-hidden">Loading...</div>
+                  </div>
+                  <p>Loading...</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <hr class="my-4" />
-    <div class="row d-flex align-items-center">
-      <div class="col-6">
-        <h2>Report Generation History</h2>
-      </div>
-      <div class="col-4">
-        <form class="d-flex" role="search">
-          <input class="form-control me-2"
-                 type="search"
-                 placeholder="Search"
-                 aria-label="keyword"
+      <hr class="my-4" />
+      <div class="row d-flex align-items-center">
+        <div class="col-6">
+          <h2>Report Generation History</h2>
+        </div>
+        <div class="col-4">
+          <form class="d-flex" role="search">
+            <input class="form-control me-2"
+                   type="search"
+                   placeholder="Search"
+                   aria-label="keyword"
+                   hx-get="{% url 'report_lists' %}"
+                   hx-target="#historical-report-container"
+                   hx-swap="innerHTML"
+                   hx-vals="js:{keyword: htmx.values(this), include_deleted: document.querySelector('#include_deleted').checked}"
+                   hx-trigger="keyup changed delay:500ms"
+                   name="keyword"
+                   id="keyword" />
+          </form>
+        </div>
+        <div class="col-2 form-check form-switch">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="include_deleted"
+                 name="include_deleted"
                  hx-get="{% url 'report_lists' %}"
                  hx-target="#historical-report-container"
                  hx-swap="innerHTML"
-                 hx-vals="js:{keyword: htmx.values(this), include_deleted: document.querySelector('#include_deleted').checked}"
-                 hx-trigger="keyup changed delay:500ms"
-                 name="keyword"
-                 id="keyword" />
-        </form>
+                 hx-vals="js:{include_deleted: htmx.values(this)}"
+                 hx-trigger="change"
+                 value="true"
+                 {% if include_deleted %}checked{% endif %}>
+          <label class="form-check-label" for="include_deleted" name="include_deleted">Deleted?</label>
+        </div>
       </div>
-      <div class="col-2 form-check form-switch">
-        <input class="form-check-input"
-               type="checkbox"
-               id="include_deleted"
-               name="include_deleted"
-               hx-get="{% url 'report_lists' %}"
-               hx-target="#historical-report-container"
-               hx-swap="innerHTML"
-               hx-vals="js:{include_deleted: htmx.values(this)}"
-               hx-trigger="change"
-               value="true"
-               {% if include_deleted %}checked{% endif %}>
-        <label class="form-check-label" for="include_deleted" name="include_deleted">Deleted?</label>
-      </div>
-    </div>
-    <div class="history-reports"
-         id="historical-report-container"
-         hx-get="{% url 'report_lists' %}"
-         hx-trigger="load delay:250ms"
-         hx-target="this"
-         hx-swap="innerHTML"
-         hx-on:htmx-after-swap="if(!this.style.minHeight) { this.style.minHeight = (this.offsetHeight + 5) + 'px' }">
-      <div class="d-flex justify-content-center align-item-center h-100">
-        <div class="spinner-grow text-secondary" role="status" aria-live="polite">
-          <div class="visually-hidden">Loading...</div>
+      <div class="history-reports"
+           id="historical-report-container"
+           hx-get="{% url 'report_lists' %}"
+           hx-trigger="load delay:250ms"
+           hx-target="this"
+           hx-swap="innerHTML"
+           hx-on:htmx-after-swap="if(!this.style.minHeight) { this.style.minHeight = (this.offsetHeight + 5) + 'px' }">
+        <div class="d-flex justify-content-center align-item-center h-100">
+          <div class="spinner-grow text-secondary" role="status" aria-live="polite">
+            <div class="visually-hidden">Loading...</div>
+          </div>
         </div>
       </div>
     </div>

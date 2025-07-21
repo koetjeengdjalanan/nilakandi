@@ -537,11 +537,11 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
         df[col] = df["tags"].apply(lambda x: extract_tag_value(x, tag))
 
     df.loc[
-        df.resource_id.str.contains("microsoft.compute/virtualmachines", case=False),
+        df.resource_id.str.contains("microsoft.compute/virtualmachines/", case=False),
         "vm_name",
     ] = df["resource_name"]
     df.loc[
-        df.resource_id.str.contains("microsoft.compute/disks", case=False), "vm_name"
+        df.resource_id.str.contains("microsoft.compute/disks/", case=False), "vm_name"
     ] = df["tags"].apply(lambda x: extract_tag_value(x, "VM Name"))
 
     df.loc[df.resource_name.str.startswith(("vba-", "VBA-")), "vm_name"] = (

@@ -12,6 +12,7 @@ urlpatterns = [
     ),
     path("services/", views.services, name="services"),
     path("testAPI/", views.testAPI, name="testAPI"),
+    path("blob_list/", views.list_blobs_from_azure, name="blob_list"),
     path(
         "reports/",
         include(
