@@ -9,8 +9,8 @@ workers = min(multiprocessing.cpu_count() + 1, 5)  # Limit maximum workers
 worker_class = "sync"
 worker_connections = 1000
 
-# Timeout settings for large file uploads (15 minutes)
-timeout = 900
+# Timeout settings for large file uploads (6 hours)
+timeout = 21600  # 6 hours
 keepalive = 5
 graceful_timeout = 30
 
@@ -30,6 +30,7 @@ access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"
 
 # Process naming
 proc_name = "nilakandi-gunicorn"
+threads = int(os.environ.get("GUNICORN_THREADS", "4"))
 
 # Limits for large file uploads
 limit_request_line = 8190

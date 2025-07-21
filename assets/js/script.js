@@ -13,8 +13,8 @@ document.addEventListener("DOMContentLoaded", function () {
             parallelUploads: 6,
             autoProcessQueue: false,
             addRemoveLinks: true,
-            maxFilesize: 512,
-            timeout: 900000,
+            maxFilesize: 512, // 512 MB
+            timeout: 21600000, // 6 hours
             headers: {
                 "x-csrftoken": csrfToken,
             },
