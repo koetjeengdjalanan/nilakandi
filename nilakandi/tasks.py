@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime
 from functools import wraps
 from uuid import UUID
@@ -13,6 +14,7 @@ from nilakandi.azure.models import BlobsInfo
 from nilakandi.helper import azure_api as azi
 from nilakandi.helper.azure_blob import Blobs
 from nilakandi.helper.miscellaneous import yearly_list
+from nilakandi.models import ReportDataSourceEnum
 from nilakandi.models import Subscription as SubscriptionsModel
 
 
@@ -368,82 +370,238 @@ def make_report(
     decimal_count: int,
     start_date: datetime.date,
     end_date: datetime.date,
-    subscription_id: UUID,
+    subscription_id: UUID | str,
     source: str = "db",
-    file_list: list[str] = [],
+    file_list: list[str] | list[list[str]] = [],
 ) -> dict[str, any]:
     """
-    Generate a report based on the specified parameters and update its status in the database.
+    Generate and save reports based on specified parameters.
 
-    This method retrieves subscription data, updates the status of a generated report to 'IN_PROGRESS',
-    then attempts to gather report data. If successful, it updates the report status to 'SUCCESS' and
-    returns report metadata. If an error occurs, it logs the error, updates the report status to 'FAILED',
-    and re-raises the exception.
+    This method creates reports for the given subscription(s) and report type(s). It handles both
+    database and file-based data sources, creates entries in the GeneratedReports model to track
+    status, and caches results for later retrieval.
 
-    Parameters:
-        report_type (str): The type of report to generate.
-        decimal_count (int): Number of decimal places to use in numeric values.
-        start_date (datetime.date): The start date for the report period.
-        end_date (datetime.date): The end date for the report period.
-        subscription_id (UUID): The unique identifier for the subscription.
-        source (str, optional): Data source to use for report generation. Defaults to "db".
+    Args:
+        report_type (str): Type of report to generate. If invalid, all report types will be generated.
+        decimal_count (int): Number of decimal places to include in numeric values.
+        start_date (datetime.date): Beginning date for the report period.
+        end_date (datetime.date): Ending date for the report period.
+        subscription_id (UUID | str): Specific subscription ID to generate reports for. If not found, reports for all subscriptions will be generated.
+        source (str, optional): Data source for the report. Defaults to "db".
+        file_list (list[str] | list[list[str]], optional): List of files or file specificationsto use as data sources. For Azure blob storage,provide nested lists with [container_name, blob_name].Defaults to empty list.
 
     Returns:
-        dict[str, any]: A dictionary containing:
-            - 'page_title': The title for the report.
-            - 'time_range': A tuple of (start_date, end_date).
+        dict[str, any]: Dictionary containing:
+            - subscriptions: List of subscription models processed
+            - report_type: The report type that was generated
+            - time_range: Tuple of (start_date, end_date)
 
     Raises:
-        Exception: Any exception that occurs during report generation is logged and re-raised.
+        Various exceptions can be raised during report generation, but they are caught
+        and recorded in the GeneratedReports model with a FAILED status.
+
+    Note:
+        - When using file-based sources (BYOF), temporary files are automatically cleaned up.
+        - Reports are cached for 24 hours (86400 seconds).
+        - Summary reports are processed separately after other report types.
     """
+    from uuid import uuid4
+
     from django.core.cache import cache
+    from pandas import DataFrame
+    from psycopg2.extras import DateTimeTZRange
 
     from nilakandi.helper.report_source_select import gather_data
     from nilakandi.models import GeneratedReports as GeneratedReportsModel
-    from nilakandi.models import GenerationStatusEnum
+    from nilakandi.models import GenerationStatusEnum, ReportTypeEnum
 
-    subscription = SubscriptionsModel.objects.get(subscription_id=subscription_id)
-    generated_report = GeneratedReportsModel.objects.get(id=self.request.id)
-    generated_report.status = GenerationStatusEnum.IN_PROGRESS.value
-    generated_report.save()
+    def ensure_date_object(date_val):
+        """Convert various date formats to datetime.date object"""
+        if isinstance(date_val, str):
+            try:
+                return datetime.fromisoformat(date_val).date()
+            except ValueError:
+                try:
+                    return datetime.strptime(date_val, "%Y-%m-%d").date()
+                except ValueError:
+                    raise ValueError(f"Unable to parse date: {date_val}")
+        elif hasattr(date_val, "date"):
+            return date_val.date()
+        elif (
+            hasattr(date_val, "year")
+            and hasattr(date_val, "month")
+            and hasattr(date_val, "day")
+        ):
+            return date_val
+        else:
+            raise ValueError(f"Invalid date format: {date_val}")
+
+    start_date = ensure_date_object(start_date)
+    end_date = ensure_date_object(end_date)
+    dt_range = DateTimeTZRange(
+        datetime.combine(start_date, datetime.min.time()),
+        datetime.combine(end_date, datetime.max.time()),
+    )
+
     try:
-        page_title, pivot = gather_data(
-            report_type=report_type,
-            decimal_count=decimal_count,
-            start_date=start_date,
-            end_date=end_date,
-            subscription=subscription,
-            source=source,
-            file_list=file_list,
-            task_id=self.request.id,
-        )
-        logging.getLogger("nilakandi.tasks").info(
-            f"Generated report for {subscription.display_name} from {start_date} to {end_date}"
-        )
-        generated_report.status = GenerationStatusEnum.COMPLETED.value
-        generated_report.report_data = {
-            "pivot": pivot,
-            "page_title": page_title,
-        }
-        logging.getLogger("nilakandi.tasks").info(
-            f"database updated for {subscription.display_name} report {self.request.id}"
-        )
-        generated_report.save()
-        cache.set(
-            key=self.request.id,
-            value={"page_title": page_title, "pivot": pivot, "status": "finish"},
-            timeout=86400,
-        )
-        return {
-            "page_title": page_title,
-            "time_range": (start_date, end_date),
-        }
-    except Exception as e:
-        logging.getLogger("nilakandi.tasks").error(
-            f"Error generating report for subscription {subscription_id}: {e}",
-            exc_info=True,
-        )
-        generated_report.status = GenerationStatusEnum.FAILED.value
-        generated_report.report_data = {"error": str(e)}
-        generated_report.save()
-        raise self.retry(exc=e, countdown=60)
+        subscriptions: list[SubscriptionsModel] = [
+            SubscriptionsModel.objects.get(subscription_id=subscription_id)
+        ]
+    except Exception:
+        subscriptions = list(SubscriptionsModel.objects.all())
+
+    try:
+        reports = [ReportTypeEnum(report_type).value]
+    except ValueError:
+        reports = ReportTypeEnum.all()
+
+    multiple_reports: bool = bool(len(reports) > 1)
+
+    res: list[DataFrame] = []
+    if len(file_list) > 0:
+        from nilakandi.helper.miscellaneous import download_file_from_azure
+
+        path_list = []
+        for file in file_list:
+            if isinstance(file, list):
+                path_list.append(
+                    str(
+                        download_file_from_azure(
+                            blob_name=file[1], container_name=file[0]
+                        )
+                    )
+                )
+            else:
+                path_list.append(file)
+        file_list = path_list
+
+    if ReportTypeEnum.SUMMARY.value in reports:
+        try:
+            generated_report = GeneratedReportsModel.objects.create(
+                id=self.request.id,
+                data_source=source,
+                subscription=subscriptions[0],
+                report_type=ReportTypeEnum.SUMMARY.value.lower(),
+                report_data={},
+                status=GenerationStatusEnum.IN_PROGRESS.value,
+                time_range=dt_range,
+            )
+            generated_report.save()
+            page_title, pivot, data = gather_data(
+                report_type=ReportTypeEnum.SUMMARY.value.lower(),
+                decimal_count=decimal_count,
+                start_date=start_date,
+                end_date=end_date,
+                subscription=subscriptions[0],
+                source=source,
+                file_list=file_list,
+                task_id=generated_report.id,
+            )
+            res.insert(0, data)
+            logging.getLogger("nilakandi.tasks").info(
+                f"Generated summary report for {subscriptions[0].display_name} from {start_date} to {end_date}"
+            )
+            generated_report.status = GenerationStatusEnum.COMPLETED.value
+            generated_report.report_data = {
+                "pivot": pivot,
+                "page_title": page_title,
+            }
+            logging.getLogger("nilakandi.tasks").info(
+                f"database updated for {subscriptions[0].display_name} summary report {generated_report.id}"
+            )
+            generated_report.save()
+            cache.set(
+                key=generated_report.id,
+                value={
+                    "page_title": page_title,
+                    "pivot": pivot,
+                    "status": "finish",
+                },
+                timeout=86400,
+            )
+        except Exception as e:
+            logging.getLogger("nilakandi.tasks").error(
+                f"Error generating summary report for subscription {subscription_id}: {e}",
+                exc_info=True,
+            )
+            generated_report.status = GenerationStatusEnum.FAILED.value
+            generated_report.report_data = {"error": str(e)}
+            generated_report.save()
+        finally:
+            reports.remove(ReportTypeEnum.SUMMARY.value)
+
+    for subscription in subscriptions:
+        for report in reports:
+            if report == ReportTypeEnum.SUMMARY.value:
+                continue  # Skip summary report for now
+            generated_report = GeneratedReportsModel.objects.create(
+                id=self.request.id if not multiple_reports else uuid4(),
+                data_source=source,
+                subscription=subscription,
+                report_type=report.lower(),
+                report_data={},
+                status=GenerationStatusEnum.IN_PROGRESS.value,
+                time_range=dt_range,
+            )
+            generated_report.save()
+
+            try:
+                page_title, pivot, data = gather_data(
+                    report_type=report.lower(),
+                    decimal_count=decimal_count,
+                    start_date=start_date,
+                    end_date=end_date,
+                    subscription=subscription,
+                    source=source,
+                    file_list=file_list,
+                    task_id=generated_report.id,
+                )
+                res.append(data)
+                logging.getLogger("nilakandi.tasks").info(
+                    f"Generated report for {subscription.display_name} from {start_date} to {end_date}"
+                )
+                generated_report.status = GenerationStatusEnum.COMPLETED.value
+                generated_report.report_data = {
+                    "pivot": pivot,
+                    "page_title": page_title,
+                }
+                logging.getLogger("nilakandi.tasks").info(
+                    f"database updated for {subscription.display_name} report {generated_report.id,}"
+                )
+                generated_report.save()
+                cache.set(
+                    key=generated_report.id,
+                    value={
+                        "page_title": page_title,
+                        "pivot": pivot,
+                        "status": "finish",
+                    },
+                    timeout=86400,
+                )
+            except Exception as e:
+                logging.getLogger("nilakandi.tasks").error(
+                    f"Error generating report for subscription {subscription_id}: {e}",
+                    exc_info=True,
+                )
+                generated_report.status = GenerationStatusEnum.FAILED.value
+                generated_report.report_data = {"error": str(e)}
+                generated_report.save()
+            finally:
+                continue
+
+    if source == ReportDataSourceEnum.BYOF.value:
+        for file in file_list:
+            try:
+                os.remove(file)
+            except OSError as e:
+                logging.getLogger("nilakandi.tasks").warning(
+                    f"Error removing file {file}: {e}", exc_info=True
+                )
+            finally:
+                continue
+
+    return {
+        "subscriptions": [sub.display_name for sub in subscriptions],
+        "report_type": report_type,
+        "time_range": (start_date, end_date),
+    }

@@ -6,11 +6,22 @@ from django.views.decorators.http import require_http_methods
 @require_http_methods(["POST"])
 def reports(request: HttpRequest):
     from datetime import datetime
+    from json import JSONDecodeError, loads
 
-    from nilakandi.models import GeneratedReports as GeneratedReportsModel
-    from nilakandi.models import GenerationStatusEnum
-    from nilakandi.models import Subscription as SubscriptionsModel
     from nilakandi.tasks import make_report
+
+    def check_files(item: str) -> list[str] | str:
+        if item is None or item.strip() == "":
+            return item
+        try:
+            parsed = loads(item)
+            if isinstance(parsed, list) and all(isinstance(i, str) for i in parsed):
+                return parsed
+            else:
+                return item
+        except (JSONDecodeError, TypeError) as error:
+            print(f"Error parsing item {item}: {error}")
+            return item
 
     request_date = (
         request.POST.get("from_date", None),
@@ -27,29 +38,24 @@ def reports(request: HttpRequest):
         if request_date[1] is None
         else datetime.strptime(request_date[1], "%Y-%m-%d").date()
     )
-    subscription = SubscriptionsModel.objects.get(
-        subscription_id=request.POST.get("subscription")
-    )
+    subscription = request.POST.get("subscription", "all")
+
+    if request.POST.getlist("file_list", None) is not None:
+        file_list = [
+            check_files(item) for item in request.POST.getlist("file_list", None)
+        ]
+    else:
+        file_list = None
 
     task = make_report.delay(
-        report_type=request.POST.get("report_type"),
+        report_type=request.POST.get("report_type", "all"),
         decimal_count=int(decimal_count),
         start_date=start_date,
         end_date=end_date,
-        subscription_id=subscription.subscription_id,
+        subscription_id=subscription,
         source=request.POST.get("data_source", "db"),
-        file_list=request.POST.getlist("file_list", []),
+        file_list=file_list,
     )
-    gen_report = GeneratedReportsModel.objects.create(
-        id=task.id,
-        data_source=request.POST.get("data_source", "db"),
-        subscription=subscription,
-        report_type=request.POST.get("report_type"),
-        report_data={},
-        status=GenerationStatusEnum.IN_PROGRESS.value,
-        time_range=(start_date, end_date),
-    )
-    gen_report.save()
     return redirect(
         "view_report",
         id=task.id,
@@ -150,7 +156,7 @@ def upload_report(request: HttpRequest):
         # Check file sizes
         total_size = sum(file.size for file in uploaded_files)
         logger.info(
-            f"Processing {len(uploaded_files)} files, total size: {total_size / (1024*1024):.2f}MB"
+            f"Receiving {len(uploaded_files)} files, total size: {total_size / (1024*1024):.2f}MB"
         )
 
         if total_size > 536870912:  # 512MB
@@ -160,9 +166,7 @@ def upload_report(request: HttpRequest):
 
         for file in uploaded_files:
             file_name = file.name.replace(" ", "_")
-            logger.info(
-                f"Processing file: {file_name} ({file.size / (1024*1024):.2f}MB)"
-            )
+            logger.info(f"Received file: {file_name} ({file.size / (1024*1024):.2f}MB)")
 
             # Instead of reading the file into memory, just use the path Django created
             if hasattr(file, "temporary_file_path"):
@@ -189,7 +193,7 @@ def upload_report(request: HttpRequest):
         data.POST["report_type"] = report_type
         data.POST["decimal_count"] = request.POST.get("decimal_count", 8)
         data.POST["data_source"] = "byof"
-        data.POST["file_list"] = paths
+        data.POST.setlist("file_list", paths)
 
         response = reports(request=data)
 

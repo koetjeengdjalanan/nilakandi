@@ -38,7 +38,7 @@ urlpatterns = [
         "api/",
         include(
             [
-                path("reports/", apis.reports, name="reports"),
+                path("reports/", apis.reports, name="api_reports"),
                 path("get_report/", apis.get_report, name="get_report"),
                 path("upload_report/", apis.upload_report, name="upload_report"),
             ]

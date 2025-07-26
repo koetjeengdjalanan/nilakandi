@@ -37,7 +37,11 @@ def home(request):
                 "subscription": gen.subscription.display_name,
                 "report_type": gen.report_type,
                 "status": gen.status,
-                "time_range": f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
+                "time_range": (
+                    f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}"
+                    if gen.time_range
+                    else "N/A"
+                ),
                 "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             }
             for gen in gen_reports[:10]
@@ -102,7 +106,8 @@ def getSubcriptions(request):
 
 
 def testAPI(request):
-    print(request)
+    print(request.POST)
+    print(type(request.POST.getlist("file_list", [])))
     return JsonResponse({"data": "ok", "req": request.POST})
 
 
@@ -157,7 +162,11 @@ def historical_report(request):
                 "subscription": gen.subscription.display_name,
                 "report_type": gen.report_type,
                 "status": gen.status,
-                "time_range": f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}",
+                "time_range": (
+                    f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}"
+                    if gen.time_range
+                    else "N/A"
+                ),
                 "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             }
             for gen in page_obj.object_list

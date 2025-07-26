@@ -1,6 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from pandas import DataFrame, NaT
+
 from nilakandi.helper.miscellaneous import df_tohtml
 from nilakandi.helper.report_generation import marketplaces as marketplacesReport
 from nilakandi.helper.report_generation import services as servicesReport
@@ -19,7 +21,7 @@ def gather_data(
     source: str = "db",
     file_list: list[str] = [],
     task_id: UUID | None = None,
-) -> tuple[str, str]:
+) -> tuple[str, str, DataFrame]:
     from nilakandi.helper.report_generation import (
         byof_source_switch,
         db_source_switch,
@@ -37,17 +39,17 @@ def gather_data(
         case "byof":
             if file_list.__len__() == 0:
                 raise ValueError("File list cannot be empty for BYOF source.")
-            data = byof_source_switch(
+            date_range, data = byof_source_switch(
                 report_type=report_type,
                 file_paths=file_list,
                 subscription_name=subscription.display_name,
             )
-            if task_id is not None:
+            if task_id is not None and not data.empty and date_range is not (NaT, NaT):
+                from psycopg2.extras import DateTimeTZRange
+
+                min_date, max_date = date_range
                 generated_report = GeneratedReportsModel.objects.get(id=task_id)
-                generated_report.time_range = (
-                    data.billing_period_start_date.min(),
-                    data.billing_period_end_date.max(),
-                )
+                generated_report.time_range = DateTimeTZRange(min_date, max_date)
                 generated_report.save()
         case _:
             data = db_source_switch(
@@ -82,4 +84,4 @@ def gather_data(
                 virtualmachinesReport(data),
                 decimal=decimal_count,
             )
-    return (page_title, pivot)
+    return (page_title, pivot, data)

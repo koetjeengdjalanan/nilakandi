@@ -1,5 +1,7 @@
 import calendar
+import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -185,3 +187,106 @@ def use_temporary_file_upload_handler(func):
         return func(request, *args, **kwargs)
 
     return _wrap_api
+
+
+def download_file_from_azure(blob_name: str, container_name: str) -> Path:
+    """Download a file from Azure Blob Storage.
+
+    Args:
+        blob_name (str): The name of the blob to download.
+        container_name (str): The name of the container where the blob is stored.
+
+    Returns:
+        str: The local path to the downloaded file.
+    """
+    from azure.storage.blob import BlobServiceClient, ExponentialRetry
+
+    from nilakandi.helper.azure_api import Auth
+
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(5),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
+        retry=tenacity.retry_if_exception_type((Exception,)),
+        reraise=True,
+    )
+    def _download_with_retry():
+        temp_file_path = file_path.with_suffix(file_path.suffix + ".tmp")
+        logging.getLogger("nilakandi.pull").info(
+            f"Downloading {blob_name} to {temp_file_path}"
+        )
+
+        try:
+            blob_properties = blob_client.get_blob_properties()
+            blob_size = blob_properties.size
+
+            with open(temp_file_path, "wb") as target_file:
+                download_stream = blob_client.download_blob(
+                    validate_content=True,
+                    max_concurrency=8,
+                    timeout=None,
+                )
+
+                downloaded_bytes = 0
+
+                for chunk in download_stream.chunks():
+                    target_file.write(chunk)
+                    downloaded_bytes += len(chunk)
+
+                    if (
+                        blob_size > 100 * 1024 * 1024
+                        and downloaded_bytes % (50 * 1024 * 1024) == 0
+                    ):
+                        progress_percent = (downloaded_bytes / blob_size) * 100
+                        print(f"Downloaded {progress_percent:.1f}% of {blob_name}")
+
+            if temp_file_path.stat().st_size != blob_size:
+                raise ValueError(
+                    f"Downloaded file size mismatch: expected {blob_size}, got {temp_file_path.stat().st_size}"
+                )
+
+            temp_file_path.rename(file_path)
+
+        except Exception as e:
+
+            if temp_file_path.exists():
+                temp_file_path.unlink()
+            raise e
+
+    file_path = Path(settings.FILE_UPLOAD_TEMP_DIR).joinpath(
+        blob_name.replace("/", "_")
+    )
+    if file_path.exists(follow_symlinks=True):
+        logging.getLogger("nilakandi.pull").info(
+            f"File {file_path} already exists, skipping download."
+        )
+        return file_path
+
+    auth = Auth(
+        client_id=settings.AZURE_CLIENT_ID,
+        tenant_id=settings.AZURE_TENANT_ID,
+        client_secret=settings.AZURE_CLIENT_SECRET,
+    )
+
+    enhanced_retry_policy = ExponentialRetry(
+        initial_backoff=2,
+        retry_total=20,
+        max_backoff=120,
+        increment_base=1.5,
+        retry_on_status_codes=[429, 500, 502, 503, 504],
+    )
+
+    service_client = BlobServiceClient(
+        account_url="https://stanillakandi.blob.core.windows.net",
+        credential=auth.credential,
+        connection_timeout=60,
+        read_timeout=None,
+        retry_policy=enhanced_retry_policy,
+    )
+
+    blob_client = service_client.get_blob_client(
+        container=container_name, blob=blob_name
+    )
+
+    _download_with_retry()
+
+    return file_path

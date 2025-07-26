@@ -610,6 +610,15 @@ class ReportTypeEnum(Enum):
     MARKETPLACES = "Marketplaces"
     VIRTUAL_MACHINES = "VirtualMachines"
 
+    def all():
+        """
+        Returns a list of all report types as strings.
+
+        Returns:
+            list: A list containing all report type values.
+        """
+        return [e.value for e in ReportTypeEnum]
+
 
 class GenerationStatusEnum(Enum):
     """
@@ -629,6 +638,15 @@ class GenerationStatusEnum(Enum):
     FAILED = "Failed"
     STALE = "Stale"
 
+    def all():
+        """
+        Returns a list of all generation statuses as strings.
+
+        Returns:
+            list: A list containing all generation status values.
+        """
+        return [e.value for e in GenerationStatusEnum]
+
 
 class ReportDataSourceEnum(Enum):
     """
@@ -643,6 +661,15 @@ class ReportDataSourceEnum(Enum):
     DB = "db"
     AZURE = "azure"
     BYOF = "upload"
+
+    def all():
+        """
+        Returns a list of all report data sources as strings.
+
+        Returns:
+            list: A list containing all report data source values.
+        """
+        return [e.value for e in ReportDataSourceEnum]
 
 
 class GeneratedReports(models.Model):

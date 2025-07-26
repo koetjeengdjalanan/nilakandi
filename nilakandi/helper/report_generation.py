@@ -65,8 +65,26 @@ def _min_max_dates(
 
 def byof_source_switch(
     report_type: str, file_paths: list[str], subscription_name: str | None = None
-):
-    import os
+) -> tuple[tuple[date, date], pd.DataFrame]:
+    """
+    Processes Bring Your Own Files (BYOF) data from CSV files for report generation.
+    This function reads data from CSV files, processes them according to the specified
+    report type, and returns a tuple containing the date range and processed DataFrame.
+    Args:
+        report_type (str): The type of report to generate.
+        file_paths (list[str]): List of paths to CSV files to process. Can be a nested list.
+        subscription_name (str | None, optional): Name of the subscription for filtering. Defaults to None.
+    Returns:
+        tuple[tuple[date, date], pd.DataFrame]: A tuple containing:
+            - A tuple of (start_date, end_date) representing the billing period range
+            - A processed pandas DataFrame with the report data
+    Raises:
+        ValueError: If any file in the input is not a CSV file.
+        Exception: If there are issues reading or processing the CSV files.
+    Notes:
+        The CSV files are expected to have 'Date', 'BillingPeriodStartDate', and
+        'BillingPeriodEndDate' columns in the format '%m/%d/%Y'.
+    """
     from io import StringIO
 
     from caseutil import to_snake
@@ -95,24 +113,23 @@ def byof_source_switch(
                     on_bad_lines="error",
                     low_memory=False,
                 )
-            except Exception:
+            except Exception as e:
+                logging.getLogger("nilakandi.tasks").error(
+                    f"Error in reading file {file}: {e}"
+                )
                 raise
             if not df.empty:
                 df.columns = [to_snake(col) for col in df.columns]
                 res.append(df)
     if res.__len__() == 0:
-        return pd.DataFrame()
+        return (pd.NaT, pd.NaT), pd.DataFrame()
 
+    min_date: pd.Timestamp = min(df.billing_period_start_date.min() for df in res)
+    max_date: pd.Timestamp = max(df.billing_period_end_date.max() for df in res)
+    date_range = (min_date.to_pydatetime(), max_date.to_pydatetime())
     processed_df = process_csv_file(res, report_type, subscription_name)
-    for file in files:
-        try:
-            os.remove(file)
-        except OSError as e:
-            logging.getLogger("nilakandi.tasks").error(
-                f"Error deleting file {file}: {e}"
-            )
 
-    return processed_df
+    return date_range, processed_df
 
 
 def process_csv_file(

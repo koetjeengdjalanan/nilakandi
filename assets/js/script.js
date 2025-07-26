@@ -127,4 +127,13 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     }
+
+    const toastElement = document.querySelector(".toast");
+    if (toastElement) {
+        const toast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: 5000,
+        });
+        toast.show();
+    }
 });
