@@ -1,6 +1,54 @@
+"""Azure Cost Report Generation Module.
+
+This module provides functionality to generate various types of Azure cost reports
+by processing data from different sources, including CSV files, database records,
+and Azure storage. It supports multiple report types: summary, services, marketplaces,
+and virtual machines.
+
+Key Components:
+--------------
+1. Data Source Functions:
+    - byof_source_switch: Processes CSV files from local filesystem
+    - grab_from_azure: Retrieves and processes data from Azure storage
+    - db_source_switch: Retrieves and processes data from the database
+
+2. Data Processing Functions:
+    - process_csv_file: Processes data based on report type requirements
+    - _min_max_dates: Helper to determine date ranges for queries
+
+3. Report Generation Functions:
+    - summary: Creates subscription cost summary pivot tables
+    - services: Creates service-based cost reports
+    - marketplaces: Creates marketplace-specific cost reports
+    - virtual_machines: Creates detailed VM cost and metadata reports
+
+Configuration:
+-------------
+COLUMN_STACKS: Defines required columns for each report type
+pandas_read_csv_args: Configuration for pandas CSV reading operations
+
+Dependencies:
+-------------
+- pandas: For data processing and pivot table generation
+- Django ORM: For database access
+- Azure Storage: For retrieving cost data files
+
+Usage:
+Typically used by views or tasks to generate reports based on user requests.
+The workflow generally involves:
+1. Retrieving raw data from a source
+2. Processing the data with report-specific logic
+3. Generating a formatted pivot table for display or export
+
+Note:
+This module is designed to work with Azure Cost Management exported data
+in specific formats. Data validation and error handling are built in to
+ensure consistency across different data sources.
+"""
+
 import logging
 from datetime import date
-from typing import Dict
+from typing import Dict, Union
 
 import pandas as pd
 from caseutil import to_camel
@@ -49,6 +97,21 @@ COLUMN_STACKS: Dict[str, tuple[str]] = {
     ],
 }
 
+pandas_read_csv_args = {
+    "parse_dates": [
+        "Date",
+        "BillingPeriodStartDate",
+        "BillingPeriodEndDate",
+    ],
+    "date_format": "%m/%d/%Y",
+    "cache_dates": True,
+    "engine": "c",
+    "encoding": "utf-8",
+    "quotechar": '"',
+    "on_bad_lines": "error",
+    "low_memory": False,
+}
+
 
 def _min_max_dates(
     start_date: date = None,
@@ -63,27 +126,25 @@ def _min_max_dates(
     return start_date, end_date
 
 
-def byof_source_switch(
-    report_type: str, file_paths: list[str], subscription_name: str | None = None
-) -> tuple[tuple[date, date], pd.DataFrame]:
-    """
-    Processes Bring Your Own Files (BYOF) data from CSV files for report generation.
-    This function reads data from CSV files, processes them according to the specified
-    report type, and returns a tuple containing the date range and processed DataFrame.
+# [x]: Refactor this function to be handle multiple subscription and only return the raw dataframe
+def byof_source_switch(file_paths: list[str]) -> pd.DataFrame:
+    """Reads CSV files from the provided file paths and combines them into a single DataFrame.
+
     Args:
-        report_type (str): The type of report to generate.
-        file_paths (list[str]): List of paths to CSV files to process. Can be a nested list.
-        subscription_name (str | None, optional): Name of the subscription for filtering. Defaults to None.
+        file_paths (list[str]): A list of file paths to CSV files to be read.
+                               If the first element is itself a list, that list will be used instead.
+
     Returns:
-        tuple[tuple[date, date], pd.DataFrame]: A tuple containing:
-            - A tuple of (start_date, end_date) representing the billing period range
-            - A processed pandas DataFrame with the report data
+        pd.DataFrame: A concatenated DataFrame containing data from all CSV files.
+                     If no files were successfully read, returns an empty DataFrame.
+
     Raises:
-        ValueError: If any file in the input is not a CSV file.
-        Exception: If there are issues reading or processing the CSV files.
+        ValueError: If any file does not have a .csv extension.
+        Exception: If there's an error reading any of the CSV files.
+
     Notes:
-        The CSV files are expected to have 'Date', 'BillingPeriodStartDate', and
-        'BillingPeriodEndDate' columns in the format '%m/%d/%Y'.
+        - Column names in the resulting DataFrame are converted to snake_case.
+        - The function uses the pandas_read_csv_args global variable when reading CSV files.
     """
     from io import StringIO
 
@@ -93,98 +154,118 @@ def byof_source_switch(
     files = file_paths[0] if isinstance(file_paths[0], list) else file_paths
     for file in files:
         if not file.endswith(".csv"):
-            raise ValueError(
-                f"Invalid file format: {file}. Only CSV files are allowed."
-            )
+            raise ValueError(f"Invalid file format: {file}. Only CSV files are allowed.")
         with open(file, "rb") as raw:
             try:
                 df = pd.read_csv(
                     StringIO(raw.read().decode("utf-8")),
-                    parse_dates=[
-                        "Date",
-                        "BillingPeriodStartDate",
-                        "BillingPeriodEndDate",
-                    ],
-                    date_format="%m/%d/%Y",
-                    cache_dates=True,
-                    engine="c",
-                    encoding="utf-8",
-                    quotechar='"',
-                    on_bad_lines="error",
-                    low_memory=False,
+                    **pandas_read_csv_args,
                 )
             except Exception as e:
-                logging.getLogger("nilakandi.tasks").error(
-                    f"Error in reading file {file}: {e}"
-                )
+                logging.getLogger("nilakandi.tasks").error(f"Error in reading file {file}: {e}")
                 raise
             if not df.empty:
                 df.columns = [to_snake(col) for col in df.columns]
                 res.append(df)
-    if res.__len__() == 0:
-        return (pd.NaT, pd.NaT), pd.DataFrame()
 
-    min_date: pd.Timestamp = min(df.billing_period_start_date.min() for df in res)
-    max_date: pd.Timestamp = max(df.billing_period_end_date.max() for df in res)
-    date_range = (min_date.to_pydatetime(), max_date.to_pydatetime())
-    processed_df = process_csv_file(res, report_type, subscription_name)
-
-    return date_range, processed_df
+    return pd.concat(res) if len(res) > 0 else pd.DataFrame()
 
 
 def process_csv_file(
-    input_dataframes: list[pd.DataFrame],
+    input_dataframes: pd.DataFrame,
     report_type: str,
     subscription_name: str | None = None,
 ) -> pd.DataFrame:
+    """Process a CSV file for report generation based on the specified report type.
+
+    This function takes a pandas DataFrame containing cost data and processes it according to the
+    specified report type. It performs data validation, filtering, and transformation operations
+    to prepare the data for reporting.
+
+    Parameters
+    ----------
+    input_dataframes : pd.DataFrame
+        The pandas DataFrame containing the data to be processed. Previously accepted lists,
+        but this usage is now deprecated.
+    report_type : str
+        The type of report to generate. Must be one of the types defined in COLUMN_STACKS.
+        Supported types include 'summary', 'services', 'marketplaces', and 'virtualmachines'.
+    subscription_name : str | None, optional
+        The name of the subscription to filter by. Required for non-summary reports.
+        Default is None.
+
+    Returns:
+    -------
+    pd.DataFrame
+        A processed DataFrame containing only the columns required for the specified report type,
+        as defined in COLUMN_STACKS.
+
+    Raises:
+    ------
+    ValueError
+        If an invalid report type is provided, if subscription_name is missing for non-summary reports,
+        or if required columns are missing.
+    TypeError
+        If input_dataframes is not a pandas DataFrame.
+    KeyError
+        If required columns are missing from the input DataFrame.
+
+    Notes:
+    -----
+    The function performs different processing steps depending on the report_type:
+    - 'summary': Basic validation only
+    - 'services': Filters out unassigned meter categories
+    - 'marketplaces': Filters for marketplace publisher types
+    - 'virtualmachines': Filters for VM-related resources and extracts VM SKU information
+    """
     import json
 
-    df_concated = pd.concat(input_dataframes, ignore_index=True)
+    if report_type not in COLUMN_STACKS:
+        raise ValueError("Invalid report type provided")
+
+    if not isinstance(input_dataframes, pd.DataFrame):
+        raise TypeError(
+            "Passing list to this function is deprecated. Input data must be a pandas DataFrame.",
+            type(input_dataframes),
+        )
+
+    df_concated = input_dataframes.copy()
     if report_type != "summary":
-        if subscription_name is None and not isinstance(subscription_name, str):
-            raise ValueError("Subscription ID is required for non-summary reports.")
-        df_concated = df_concated[
-            df_concated.subscription_name.str.match(
-                subscription_name, case=False, na=False
-            )
-        ]
+        if not subscription_name or not isinstance(subscription_name, str):
+            raise ValueError("Subscription name is required for non-summary reports.")
+        df_concated = df_concated[df_concated.subscription_name.str.match(subscription_name, case=False, na=False)]
 
     if "cost_in_billing_currency" in df_concated.columns:
-        df_concated.rename(
-            columns={"cost_in_billing_currency": "total_cost"}, inplace=True
-        )
+        df_concated.rename(columns={"cost_in_billing_currency": "total_cost"}, inplace=True)
 
     for col in ("billing_period_start_date", "billing_period_end_date"):
         if col not in df_concated.columns:
             raise KeyError(f"{col} column missing in data")
     df_concated = df_concated[
-        df_concated["billing_period_start_date"].notnull()
-        & df_concated["billing_period_end_date"].notnull()
+        df_concated["billing_period_start_date"].notnull() & df_concated["billing_period_end_date"].notnull()
     ]
 
     cols = df_concated.columns
+    # Assign month for all report types to avoid duplication
+    df_concated["month"] = df_concated["billing_period_end_date"].copy()
     if report_type == "summary":
-        df_concated["month"] = df_concated["billing_period_end_date"].copy()
+        pass
     elif report_type == "services":
         if "meter_category" not in cols:
             raise KeyError("meter_category column missing")
         mcat = df_concated["meter_category"].astype(str)
-        df_concated["month"] = df_concated["billing_period_end_date"].copy()
         df_concated = df_concated[~mcat.str.contains("Unassigned", na=False)]
     elif report_type == "marketplaces":
         if "publisher_type" not in cols:
             raise KeyError("publisher_type column missing")
         pub = df_concated["publisher_type"].astype(str)
-        df_concated["month"] = df_concated["billing_period_end_date"].copy()
         df_concated = df_concated[pub.str.lower() == "marketplace"]
     elif report_type == "virtualmachines":
         for col in ("meter_category", "resource_id", "additional_info"):
             if col not in cols:
                 raise KeyError(f"{col} column missing")
         mcat = df_concated["meter_category"].astype(str)
-        df_concated = df_concated[
-            ~mcat.str.contains("Microsoft Defender for Cloud", case=False, na=False)
-        ]
+        df_concated = df_concated[~mcat.str.contains("Microsoft Defender for Cloud", case=False, na=False)]
         rid = df_concated["resource_id"].astype(str)
         df_concated = df_concated[
             rid.str.contains(
@@ -214,24 +295,50 @@ def process_csv_file(
         raise ValueError("Invalid report type provided")
 
     required_cols = COLUMN_STACKS[report_type]
-    missing_cols = [
-        to_camel(col) for col in required_cols if col not in df_concated.columns
-    ]
+    missing_cols = [to_camel(col) for col in required_cols if col not in df_concated.columns]
     if missing_cols:
-        raise ValueError(
-            f"Missing required columns for {report_type} report: {', '.join(missing_cols)}"
-        )
+        raise ValueError(f"Missing required columns for {report_type} report: {', '.join(missing_cols)}")
 
     final_cols = list(required_cols)
     return df_concated[final_cols]
 
 
+# [x]: Refactor this function to be handle multiple subscription and only return the raw dataframe
 def grab_from_azure(
     report_type: str,
-    subscription,
+    subscription: SubscriptionModel | list[SubscriptionModel],
     start_date=None,
     end_date=None,
 ):
+    """Retrieves and aggregates CSV report data from Azure storage.
+
+    This function queries the Azure storage for report files matching the specified criteria,
+    downloads the CSV files, and combines them into a single pandas DataFrame.
+
+    Parameters
+    ----------
+    report_type : str
+        The type of report to retrieve. Must be one of the types defined in COLUMN_STACKS.
+    subscription : SubscriptionModel | list[SubscriptionModel]
+        The subscription(s) to filter the reports by. Not used when report_type is "summary".
+    start_date : datetime, optional
+        The start date for filtering reports. If None, a default start date will be used.
+    end_date : datetime, optional
+        The end date for filtering reports. If None, a default end date will be used.
+
+    Returns:
+        pd.DataFrame :
+            A DataFrame containing the combined data from all matching CSV files.
+            Returns an empty DataFrame if no data is found.
+
+    Raises:
+    ------
+    ValueError
+        If the provided report_type is not in COLUMN_STACKS.
+    Exception
+        Any exception that occurs during file reading is propagated.
+    """
+    import uuid
     from io import StringIO
 
     from caseutil import to_snake
@@ -246,14 +353,14 @@ def grab_from_azure(
     data_source = storages["azures-storages"]
     start_date, end_date = _min_max_dates(start_date, end_date)
 
-    q_args = {
+    q_args: dict[str, Union[DateTimeTZRange | list[uuid.UUID]]] = {
         "report_datetime_range__contained_by": DateTimeTZRange(start_date, end_date)
     }
-    if report_type != "summary":
-        q_args["subscription"] = subscription.pk
-    files_path = ExportHistoryModel.objects.filter(**q_args).values_list(
-        "blobs_path", flat=True
-    )
+    if report_type != "summary" or "summary" not in report_type:
+        q_args["subscription__in"] = (
+            [subscription.pk] if isinstance(subscription, SubscriptionModel) else [sub.pk for sub in subscription]
+        )
+    files_path = ExportHistoryModel.objects.filter(**q_args).values_list("blobs_path", flat=True)
 
     list_of_raw_data = [
         (file, data_source.size(file))
@@ -268,18 +375,7 @@ def grab_from_azure(
             try:
                 df = pd.read_csv(
                     StringIO(raw.read().decode("utf-8")),
-                    parse_dates=[
-                        "Date",
-                        "BillingPeriodStartDate",
-                        "BillingPeriodEndDate",
-                    ],
-                    date_format="%m/%d/%Y",
-                    cache_dates=True,
-                    engine="python",
-                    encoding="utf-8",
-                    sep=r',(?=(?:[^"]*"[^"]*")*[^"]*$)',
-                    quotechar='"',
-                    on_bad_lines="error",
+                    **pandas_read_csv_args,
                 )
             except Exception:
                 raise
@@ -287,20 +383,46 @@ def grab_from_azure(
                 df.columns = [to_snake(col) for col in df.columns]
                 res.append(df)
 
-    if not res:
-        return pd.DataFrame()
-
-    return process_csv_file(res, report_type)
+    return pd.concat(res) if len(res) > 0 else pd.DataFrame()
 
 
 def db_source_switch(
     report_type: str,
-    subscription: SubscriptionModel,
+    subscriptions: SubscriptionModel | list[SubscriptionModel],
     start_date: date = None,
     end_date: date = None,
 ):
+    """Retrieves and processes report data from the database for the specified report type and subscriptions.
 
+    Parameters
+    ----------
+    report_type : str
+        The type of report to generate. Must be one of the types defined in COLUMN_STACKS.
+    subscriptions : SubscriptionModel | list[SubscriptionModel]
+        A single SubscriptionModel instance or a list of SubscriptionModel instances to filter the reports by.
+    start_date : date, optional
+        The start date for filtering reports. If None, the earliest available date is used.
+    end_date : date, optional
+        The end date for filtering reports. If None, the latest available date is used.
+
+    Returns:
+        pd.DataFrame
+            A DataFrame containing the processed data for the specified report type and subscriptions.
+
+    Raises:
+    ------
+    ValueError
+        If an invalid report type is provided.
+    """
     start_date, end_date = _min_max_dates(start_date, end_date)
+
+    # Prepare list of subscription display names and PKs
+    if isinstance(subscriptions, SubscriptionModel):
+        subscription_display_names = [subscriptions.display_name]
+        subscription_pks = [subscriptions.pk]
+    else:
+        subscription_display_names = [sub.display_name for sub in subscriptions]
+        subscription_pks = [sub.pk for sub in subscriptions]
 
     match report_type:
         case "summary":
@@ -319,7 +441,7 @@ def db_source_switch(
         case "services":
             raw = (
                 ExportReportModel.objects.filter(
-                    subscription_name__contains=subscription.display_name,
+                    subscription_name__in=subscription_display_names,
                     billing_period_start_date__isnull=False,
                     billing_period_start_date__gte=start_date,
                     billing_period_end_date__isnull=False,
@@ -339,7 +461,7 @@ def db_source_switch(
         case "marketplaces":
             raw = (
                 ExportReportModel.objects.filter(
-                    subscription_name__contains=subscription.display_name,
+                    subscription_name__in=subscription_display_names,
                     billing_period_start_date__isnull=False,
                     billing_period_start_date__gte=start_date,
                     billing_period_end_date__isnull=False,
@@ -357,11 +479,11 @@ def db_source_switch(
 
             raw = (
                 ExportReportModel.objects.filter(
-                    Q(resource_id__icontains="microsoft.compute/virtualmachines")
-                    | Q(resource_id__icontains="microsoft.compute/disks")
+                    Q(resource_id__icontains="microsoft.compute/virtualmachines/")
+                    | Q(resource_id__icontains="microsoft.compute/disks/")
                 )
                 .filter(
-                    resource_id__icontains=subscription.pk,
+                    resource_id__regex="|".join(str(pk) for pk in subscription_pks),
                     billing_period_start_date__isnull=False,
                     billing_period_start_date__gte=start_date,
                     billing_period_end_date__isnull=False,
@@ -385,10 +507,42 @@ def db_source_switch(
             )
         case _:
             raise ValueError("Invalid report type provided")
+    # Return an empty DataFrame if no data is found
+    if not raw or len(raw) < 1:
+        return pd.DataFrame()
     return pd.DataFrame(raw)
 
 
 def summary(source: pd.DataFrame) -> pd.DataFrame:
+    """Generate a summary pivot table of costs by subscription name, month, and publisher type.
+
+    This function creates a pivot table from the source DataFrame, with subscription names as rows
+    and a multi-level column index of month and publisher type. The values represent the sum of
+    total costs. The pivot table includes grand totals and has months sorted chronologically
+    with the grand total at the end.
+
+    Parameters
+    ----------
+    source : pd.DataFrame
+        Source DataFrame containing at minimum the columns:
+        - subscription_name: Name of the subscription
+        - month: Month of the cost (date, string, or period)
+        - publisher_type: Type of the publisher
+        - total_cost: Cost value to be summarized
+
+    Returns:
+        pd.DataFrame
+            A pivot table with:
+            - Index: subscription_name
+            - Columns: MultiIndex of (month, publisher_type) where month is formatted as "Month Year"
+            - Values: Sum of total_cost
+            - Includes grand totals
+
+    Notes:
+    -----
+    If the input DataFrame is empty, returns the empty DataFrame without processing.
+    Converts the "month" column to period type if it's not already in that format.
+    """
     df = source
     if df.empty:
         return df
@@ -423,6 +577,32 @@ def summary(source: pd.DataFrame) -> pd.DataFrame:
 
 
 def services(source: pd.DataFrame) -> pd.DataFrame:
+    """Generate a pivoted cost report summarized by services (meters).
+
+    This function processes cost data and creates a pivot table showing total costs across
+    different time periods for each meter configuration. It organizes data by meter categories,
+    subcategories, and individual meters with monthly columns.
+
+    Parameters
+    ----------
+    source : pd.DataFrame
+        Source DataFrame containing at minimum the columns 'meter_category',
+        'meter_sub_category', 'meter_name', 'month', and 'total_cost'.
+
+    Returns:
+        pd.DataFrame
+            A pivot table with:
+            - Multi-level index of ['meter_category', 'meter_sub_category', 'meter_name']
+            - Columns representing months formatted as 'MMM YYYY' (e.g., 'Jan 2022')
+            - The rightmost column showing the grand total
+            - Cell values representing the sum of 'total_cost'
+            - Returns empty DataFrame if source is empty
+
+    Notes:
+    -----
+    - Missing values in 'meter_sub_category' are filled with 'meter_category' values
+    - Months are sorted chronologically with the 'Grand Total' column at the end
+    """
     df = source
     if df.empty:
         return df
@@ -448,14 +628,36 @@ def services(source: pd.DataFrame) -> pd.DataFrame:
         pivot = pd.concat([month_cols, grand_total_col], axis=1)
     else:
         pivot = pivot.sort_index(axis=1)
-    pivot.columns = [
-        col.strftime("%b %Y") if isinstance(col, pd.Period) else col
-        for col in pivot.columns
-    ]
+    pivot.columns = [col.strftime("%b %Y") if isinstance(col, pd.Period) else col for col in pivot.columns]
     return pivot
 
 
 def marketplaces(source: pd.DataFrame) -> pd.DataFrame:
+    """Generate a pivot table of marketplace costs by publisher, plan, and month.
+
+    This function creates a pivot table from the source DataFrame, showing total costs
+    for each publisher and plan across different months, with a grand total column.
+
+    Parameters
+    ----------
+    source : pd.DataFrame
+        Input DataFrame containing marketplace data. Expected to have columns:
+        'month', 'publisher_name', 'plan_name', and 'total_cost'.
+
+    Returns:
+        pd.DataFrame
+            A pivot table with:
+            - Multi-index rows of 'publisher_name' and 'plan_name'
+            - Columns representing months (formatted as 'MMM YYYY')
+            - Values showing the sum of 'total_cost'
+            - A 'Grand Total' column at the end
+            - Returns empty DataFrame if source is empty
+
+    Notes:
+    -----
+    The month columns are sorted chronologically, with the 'Grand Total'
+    column appearing at the end of the table.
+    """
     df = source
     if df.empty:
         return df
@@ -476,14 +678,40 @@ def marketplaces(source: pd.DataFrame) -> pd.DataFrame:
         pivot = pd.concat([month_cols, grand_total_col], axis=1)
     else:
         pivot = pivot.sort_index(axis=1)
-    pivot.columns = [
-        col.strftime("%b %Y") if isinstance(col, pd.Period) else col
-        for col in pivot.columns
-    ]
+    pivot.columns = [col.strftime("%b %Y") if isinstance(col, pd.Period) else col for col in pivot.columns]
     return pivot
 
 
-def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
+def virtual_machines(source: pd.DataFrame) -> pd.DataFrame:
+    """Process and transform Azure virtual machine cost data into a pivoted summary report.
+
+    This function processes Azure cost data, focusing on virtual machine resources to create a
+    detailed cost analysis pivot table. It performs the following operations:
+    - Extracts tag values for application name, workstream, project, and owner
+    - Categorizes meter entries into logical groups (VM License, VM Monthly, Storage, etc.)
+    - Aggregates resources with specific prefixes (vba-, veeam-proxy-appliance)
+    - Normalizes resource groups and VM names
+    - Extracts VM metadata from resource IDs and tags
+    - Creates a pivot table with costs grouped by VM and metadata, organized by month and meter category
+    - Calculates monthly subtotals and grand totals
+
+    Parameters
+    ----------
+    source : pd.DataFrame
+        Source DataFrame containing Azure cost data with columns like resource_id,
+        resource_name, meter_category, tags, total_cost (or cost_in_billing_currency),
+        and billing_period_end_date.
+
+    Returns:
+        pd.DataFrame
+            A pivot table with VM details as index (name, resource group, description, etc.),
+            costs grouped by month and meter category as columns, and appropriate subtotals.
+
+    Raises:
+    ------
+    ValueError
+        If resource_id is empty or doesn't match expected patterns during categorization.
+    """
     from re import sub
 
     # helper to extract tag value
@@ -535,14 +763,10 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
 
     for prefix in ["vba-", "veeam-proxy-appliance"]:
         agg_df = aggregate_prefix(prefix)
-        df = pd.concat(
-            [df[~df.resource_name.str.startswith(prefix)], agg_df], ignore_index=True
-        )
+        df = pd.concat([df[~df.resource_name.str.startswith(prefix)], agg_df], ignore_index=True)
 
     df.reset_index(drop=True, inplace=True)
-    df["tags"] = df.groupby(["resource_name", "resource_group", "month"])[
-        "tags"
-    ].transform("last")
+    df["tags"] = df.groupby(["resource_name", "resource_group", "month"])["tags"].transform("last")
 
     extract_list: list[tuple[str, str]] = [
         ("description", "Application Name"),
@@ -557,16 +781,12 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
         df.resource_id.str.contains("microsoft.compute/virtualmachines/", case=False),
         "vm_name",
     ] = df["resource_name"]
-    df.loc[
-        df.resource_id.str.contains("microsoft.compute/disks/", case=False), "vm_name"
-    ] = df["tags"].apply(lambda x: extract_tag_value(x, "VM Name"))
+    df.loc[df.resource_id.str.contains("microsoft.compute/disks/", case=False), "vm_name"] = df["tags"].apply(
+        lambda x: extract_tag_value(x, "VM Name")
+    )
 
-    df.loc[df.resource_name.str.startswith(("vba-", "VBA-")), "vm_name"] = (
-        "VBA Workers VM"
-    )
-    df.loc[df.resource_name.str.startswith("veeam-proxy-appliance"), "vm_name"] = (
-        "veeam-proxy-appliance"
-    )
+    df.loc[df.resource_name.str.startswith(("vba-", "VBA-")), "vm_name"] = "VBA Workers VM"
+    df.loc[df.resource_name.str.startswith("veeam-proxy-appliance"), "vm_name"] = "veeam-proxy-appliance"
 
     df[["meter_category", "resource_id"]] = df[["meter_category", "resource_id"]].apply(
         categorize_meter_category, axis=1
@@ -600,25 +820,29 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
     df.pic_owner = df.groupby(["vm_name"])["pic_owner"].transform(
         lambda x: x.dropna().mode().iloc[0] if not x.dropna().mode().empty else None
     )
-    dfcopy = df.copy()
-    dfcopy = dfcopy.join(
-        only_details.set_index("vm_name"), on="vm_name", rsuffix="_details"
+    # Merge only necessary columns from only_details into df to save memory
+    df = df.merge(
+        only_details,
+        how="left",
+        left_on="vm_name",
+        right_on="vm_name",
+        suffixes=("", "_details"),
     )
-    dfcopy.fillna(
+    df.fillna(
         {
             "vm_name": "-",
-            "resource_group": "-",
-            "description": "-",
-            "marvel_workstream": "-",
-            "marvel_project": "-",
-            "pic_owner": "-",
-            "vm_sku": "-",
+            "resource_group_details": "-",
+            "description_details": "-",
+            "marvel_workstream_details": "-",
+            "marvel_project_details": "-",
+            "pic_owner_details": "-",
+            "vm_sku_details": "-",
         },
         inplace=True,
     )
 
     pivot = pd.pivot_table(
-        dfcopy,
+        df,
         values="total_cost",
         index=[
             "vm_name",
@@ -637,11 +861,7 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
 
     # Sub Totals Calculation
     sub_totals = []
-    months = [
-        col
-        for col in pivot.columns.get_level_values(0).unique()
-        if col != "Grand Total"
-    ]
+    months = [col for col in pivot.columns.get_level_values(0).unique() if col != "Grand Total"]
     for month in months:
         month_col = [col for col in pivot.columns if col[0] == month]
         if month_col:
@@ -653,9 +873,7 @@ def virtual_machine(source: pd.DataFrame) -> pd.DataFrame:
 
     sorted_cols = []
     for month in months:
-        month_cols = [
-            col for col in pivot.columns if col[0] == month and col[1] != "Sub Total"
-        ]
+        month_cols = [col for col in pivot.columns if col[0] == month and col[1] != "Sub Total"]
         sorted_cols.extend(month_cols)
         sub_total_col = (month, "Sub Total")
         if sub_total_col in pivot.columns:
