@@ -50,7 +50,7 @@ def gather_data(
                 min_date, max_date = date_range
                 generated_report = GeneratedReportsModel.objects.get(id=task_id)
                 generated_report.time_range = DateTimeTZRange(min_date, max_date)
-                generated_report.save()
+                generated_report.save(update_fields=["time_range"])
         case _:
             data = db_source_switch(
                 report_type=report_type,

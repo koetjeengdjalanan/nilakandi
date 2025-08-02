@@ -34,6 +34,21 @@ STORAGES["azures-storages"] = {
         "azure_container": env("AZURE_STORAGE_CONTAINER", default="nilakandi"),
     },
 }
+STORAGES["result-blobs"] = {
+    "BACKEND": "storages.backends.azure_storage.AzureStorage",
+    "OPTIONS": {
+        "token_credential": ClientSecretCredential(
+            tenant_id=env("AZURE_TENANT_ID"),
+            client_id=env("AZURE_CLIENT_ID"),
+            client_secret=env("AZURE_CLIENT_SECRET"),
+            cache_persistence_options=TokenCachePersistenceOptions(
+                allow_unencrypted_storage=True, name="nilakandi-azure-token"
+            ),
+        ),
+        "account_name": env("AZURE_STORAGE_ACCOUNT_NAME", default="nilakandi"),
+        "azure_container": env("AZURE_RESULT_CONTAINER", default="nilakandi"),
+    },
+}
 
 if DEBUG:
     # The order is important. The new middleware must come before CsrfViewMiddleware.

@@ -373,6 +373,7 @@ def make_report(
     subscription_id: UUID | str,
     source: str = "db",
     file_list: list[str] | list[list[str]] = [],
+    save_to_cloud: bool = True,
 ) -> dict[str, any]:
     """
     Generate and save reports based on specified parameters.
@@ -388,7 +389,8 @@ def make_report(
         end_date (datetime.date): Ending date for the report period.
         subscription_id (UUID | str): Specific subscription ID to generate reports for. If not found, reports for all subscriptions will be generated.
         source (str, optional): Data source for the report. Defaults to "db".
-        file_list (list[str] | list[list[str]], optional): List of files or file specificationsto use as data sources. For Azure blob storage,provide nested lists with [container_name, blob_name].Defaults to empty list.
+        file_list (list[str] | list[list[str]], optional): List of files or file specifications to use as data sources. For Azure blob storage, provide nested lists with [container_name, blob_name]. Defaults to empty list.
+        save_to_cloud (bool, optional): Whether to save the report to cloud storage. Defaults to True.
 
     Returns:
         dict[str, any]: Dictionary containing:
@@ -457,7 +459,7 @@ def make_report(
 
     multiple_reports: bool = bool(len(reports) > 1)
 
-    res: list[DataFrame] = []
+    res: list[tuple[str, DataFrame]] = []
     if len(file_list) > 0:
         from nilakandi.helper.miscellaneous import download_file_from_azure
 
@@ -497,7 +499,7 @@ def make_report(
                 file_list=file_list,
                 task_id=generated_report.id,
             )
-            res.insert(0, data)
+            res.insert(0, (page_title, data))
             logging.getLogger("nilakandi.tasks").info(
                 f"Generated summary report for {subscriptions[0].display_name} from {start_date} to {end_date}"
             )
@@ -509,7 +511,6 @@ def make_report(
             logging.getLogger("nilakandi.tasks").info(
                 f"database updated for {subscriptions[0].display_name} summary report {generated_report.id}"
             )
-            generated_report.save()
             cache.set(
                 key=generated_report.id,
                 value={
@@ -526,8 +527,8 @@ def make_report(
             )
             generated_report.status = GenerationStatusEnum.FAILED.value
             generated_report.report_data = {"error": str(e)}
-            generated_report.save()
         finally:
+            generated_report.save(update_fields=["status", "report_data"])
             reports.remove(ReportTypeEnum.SUMMARY.value)
 
     for subscription in subscriptions:
@@ -556,7 +557,7 @@ def make_report(
                     file_list=file_list,
                     task_id=generated_report.id,
                 )
-                res.append(data)
+                res.append((page_title, data))
                 logging.getLogger("nilakandi.tasks").info(
                     f"Generated report for {subscription.display_name} from {start_date} to {end_date}"
                 )
@@ -568,7 +569,6 @@ def make_report(
                 logging.getLogger("nilakandi.tasks").info(
                     f"database updated for {subscription.display_name} report {generated_report.id,}"
                 )
-                generated_report.save()
                 cache.set(
                     key=generated_report.id,
                     value={
@@ -585,9 +585,17 @@ def make_report(
                 )
                 generated_report.status = GenerationStatusEnum.FAILED.value
                 generated_report.report_data = {"error": str(e)}
-                generated_report.save()
             finally:
+                generated_report.save(update_fields=["status", "report_data"])
                 continue
+    if save_to_cloud:
+        from nilakandi.helper.excel_handler import export_to_excel, save_as_blob
+
+        logging.getLogger("nilakandi.tasks").info(
+            f"Saving report to cloud storage for {len(res)} reports"
+        )
+        excel_buffer = export_to_excel(inputs=res)
+        save_as_blob(file=excel_buffer, blobs_destination="Nilakandi-Result/")
 
     if source == ReportDataSourceEnum.BYOF.value:
         for file in file_list:
