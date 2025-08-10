@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}
+    Loading Task {{ task_id }}
+{% endblock title %}
+{% block content %}
+    <div class="container py-4">
+        <h2>Generating Report</h2>
+        <p class="text-muted">
+            Task ID: <code id="task-id">{{ task_id }}</code>
+        </p>
+        <div class="card my-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong id="progress-status">Connecting...</strong>
+                    <span id="progress-percent" class="badge bg-secondary">0%</span>
+                </div>
+                <div class="progress my-3 progress-lg">
+                    <div id="progress-bar"
+                         class="progress-bar progress-bar-striped progress-bar-animated w-0">0%</div>
+                </div>
+                <pre class="bg-light p-2 small"
+                     id="progress-log"
+                     style="max-height: 240px;
+                            overflow: auto">Waiting for updates...</pre>
+                <div id="completion-actions" class="d-none mt-3">
+                    <a href="{% url 'home' %}" class="btn btn-outline-secondary">Back Home</a>
+                    <a id="view-report-link" href="#" class="btn btn-primary d-none">View Report</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+(function() {
+  const taskId = document.getElementById('task-id').textContent.trim();
+  const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${wsProto}://${window.location.host}/ws/task-progress/${taskId}/`;
+  const progressBar = document.getElementById('progress-bar');
+  const progressStatus = document.getElementById('progress-status');
+  const progressPercent = document.getElementById('progress-percent');
+  const progressLog = document.getElementById('progress-log');
+  const completionActions = document.getElementById('completion-actions');
+  const viewReportLink = document.getElementById('view-report-link');
+
+  function updateUI(payload) {
+    if (!payload) return;
+    const status = payload.status || 'UNKNOWN';
+    progressStatus.textContent = status + (payload.result && payload.result.status ? ` - ${payload.result.status}` : '');
+    let current = 0, total = 0;
+    if (payload.result) {
+      current = parseInt(payload.result.current || 0, 10);
+      total = parseInt(payload.result.total || 0, 10);
+    }
+    const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+    progressBar.style.width = percent + '%';
+    progressBar.textContent = percent + '%';
+    progressPercent.textContent = percent + '%';
+    if (['SUCCESS', 'FAILURE', 'REVOKED', 'ERROR'].includes(status)) {
+      progressBar.classList.remove('progress-bar-animated');
+      progressBar.classList.remove('progress-bar-striped');
+      completionActions.classList.remove('d-none');
+      if (status === 'SUCCESS' && payload.result && payload.result.generated_report_id) {
+        viewReportLink.href = `/reports/${payload.result.generated_report_id}/`;
+        viewReportLink.classList.remove('d-none');
+      }
+    }
+    try {
+      const ts = new Date().toISOString();
+      const line = `${ts} | ${JSON.stringify(payload)}`;
+      progressLog.textContent = (progressLog.textContent === 'Waiting for updates...' ? '' : progressLog.textContent + '\n') + line;
+      progressLog.scrollTop = progressLog.scrollHeight;
+    } catch (e) {}
+  }
+
+  function connect() {
+    const ws = new WebSocket(wsUrl);
+    let retryCount = 0;
+    ws.onopen = () => { progressStatus.textContent = 'Connected. Waiting for first update...'; };
+    ws.onmessage = (event) => {
+      try { updateUI(JSON.parse(event.data)); } catch (e) { console.error(e); }
+    };
+    ws.onclose = (evt) => {
+      if (evt.code === 4404) {
+        progressStatus.textContent = 'Task not found yet. Retrying...';
+      } else if (evt.code !== 1000) {
+        progressStatus.textContent = `Disconnected (code=${evt.code}). Reconnecting...`;
+      } else {
+        progressStatus.textContent += ' (closed)';
+        return;
+      }
+      if (retryCount < 20 && !['SUCCESS','FAILURE','REVOKED'].some(s => progressStatus.textContent.includes(s))) {
+        retryCount++; setTimeout(connect, Math.min(5000, 500 * retryCount));
+      }
+    };
+    ws.onerror = () => { progressStatus.textContent = 'WebSocket error'; };
+  }
+  connect();
+})();
+    </script>
+{% endblock content %}

@@ -1,3 +1,5 @@
+"""Redis configuration for Django and Channels."""
+
 from config.env import env
 
 REDIS_HOST = env("REDIS_HOST", default="localhost")
@@ -11,6 +13,16 @@ CACHES: dict[str, dict[str, str]] = {
         "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
+
+# Channels / WebSocket configuration
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],  # Reuse existing Redis instance
         },
     }
 }

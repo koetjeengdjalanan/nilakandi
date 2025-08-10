@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django_bootstrap5",
     "corsheaders",
+    "channels",  # WebSocket support
     "nilakandi",
 ]
 

@@ -1,3 +1,5 @@
+"""Logging Configuration for Nilakandi Project."""
+
 from pathlib import Path
 
 from config.env import env
@@ -15,11 +17,11 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{levelname} \t {asctime} {module} {message}",
+            "format": "{levelname}: \t {asctime} {module} {message}",
             "style": "{",
         },
         "simple": {
-            "format": "{levelname} \t {asctime} {message}",
+            "format": "{levelname}: \t {asctime} {message}",
             "style": "{",
         },
     },

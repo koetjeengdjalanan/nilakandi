@@ -106,7 +106,7 @@ def export_to_excel(inputs: list[tuple[str, pd.DataFrame]], decimal_count: int =
                 col_series = df.iloc[:, ci]
                 if pd.api.types.is_numeric_dtype(col_series):
                     excel_col = index_levels + ci
-                    width = col_widths.get(excel_col)
+                    width = col_widths.get(excel_col) if col_widths else 20
                     ws.set_column(excel_col, excel_col, width, num_fmt)
 
     buffer.seek(0)

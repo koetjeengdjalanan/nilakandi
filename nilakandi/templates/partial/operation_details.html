@@ -1,0 +1,29 @@
+<div class="modal operation-modal" id="operation-detail-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Operation Details</h5>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>name</strong> {{ operation.name|default:"-" }}</p>
+                <p><strong>type</strong> {{ operation.type|default:"-" }}</p>
+                <p><strong>status</strong> {{ operation.status|default:"-" }}</p>
+                <p><strong>started</strong> {{ operation.started|date:"Y-m-d H:i:s"|default:"-" }}</p>
+                <p><strong>completed</strong> {{ operation.completed|date:"Y-m-d H:i:s"|default:"-" }}</p>
+                <p><strong>duration</strong> {{ operation.duration|default:"-" }}</p>
+                {% if operation.status == "Completed" %}
+                    {% include "partial/historical_report.html" %}
+                {% else %}
+                    <p><strong>error</strong> {{ operation.error|default:"-" }}</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

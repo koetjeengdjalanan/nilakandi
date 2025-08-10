@@ -67,7 +67,7 @@ def reports(request: HttpRequest):
     else:
         file_list = None
 
-    task = make_report.delay(
+    make_report.delay(
         report_type=request.POST.get("report_type", "all"),
         decimal_count=int(decimal_count),
         start_date=start_date,
@@ -76,10 +76,7 @@ def reports(request: HttpRequest):
         source=request.POST.get("data_source", "db"),
         file_list=file_list,
     )
-    return redirect(
-        "view_report",
-        id=task.id,
-    )
+    return redirect("operations")
 
 
 @require_http_methods(["POST"])

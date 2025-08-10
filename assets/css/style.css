@@ -113,3 +113,33 @@ td {
     white-space: nowrap;
     overflow-x: auto;
 }
+
+/* Operation Modal (moved from inline style in partial/operation_details.html) */
+.operation-modal .modal-dialog {
+    max-width: 80vw;
+    width: 80vw;
+}
+
+.operation-modal .modal-content {
+    max-height: 80vh;
+}
+
+.operation-modal .modal-body {
+    overflow-y: auto;
+    max-height: calc(80vh - 120px);
+}
+
+@media (max-width: 992px) {
+    .operation-modal .modal-dialog {
+        max-width: 95vw;
+        width: 95vw;
+    }
+
+    .operation-modal .modal-content {
+        max-height: 90vh;
+    }
+
+    .operation-modal .modal-body {
+        max-height: calc(90vh - 120px);
+    }
+}

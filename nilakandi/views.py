@@ -223,9 +223,7 @@ def historical_report(request):
         Page number.
 
     Returns:
-    -------
-    HttpResponse
-        Rendered partial/historical_report.html.
+        HttpResponse: Rendered partial/historical_report.html.
     """
     from django.core.paginator import Paginator
 
@@ -487,9 +485,68 @@ def operation_details_or_list(request, ops_id=None):
     from nilakandi.models import Operation as OperationsModel
 
     if ops_id:
-        raise NotImplementedError("Operation details view is not implemented yet.")
-        operation = get_object_or_404(OperationsModel, id=UUID(ops_id))
-        return render(request, "partial/operation_details.html", context={"operation": operation})
+        # Fetch operation; 404 if not found.
+        operation = get_object_or_404(OperationsModel, id=UUID(str(ops_id)))
+
+        # Import execution status enum lazily to avoid top-level import clutter.
+        from nilakandi.models import ExecStatusEnum  # local import per style guidance
+
+        status: str = operation.status
+        # Status buckets
+        completed_status: str = ExecStatusEnum.COMPLETED.value
+        # Active statuses where we still expect a running celery task / progress key in Redis.
+        active_statuses: set[str] = {
+            ExecStatusEnum.IN_PROGRESS.value,
+            ExecStatusEnum.QUEUED.value,
+            "Pending",  # Some legacy / cross-enum producers may set 'Pending'
+        }
+
+        if status == completed_status:
+            from nilakandi.models import GeneratedReports as GeneratedReportsModel
+
+            # Show final operation details.
+            return render(
+                request,
+                "partial/operation_details.html",
+                context={
+                    "operation": operation,
+                    "active": False,
+                    "expired_task": False,
+                    "datas": [
+                        {
+                            "url": f"reports/{gen.id}",
+                            "data_source": gen.data_source,
+                            "subscription": gen.subscription.display_name,
+                            "report_type": gen.report_type,
+                            "status": gen.status,
+                            "time_range": (
+                                f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}"
+                                if gen.time_range
+                                else "N/A"
+                            ),
+                            "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                        }
+                        for gen in GeneratedReportsModel.objects.filter(id__in=operation.output.get("results", []))
+                    ],
+                },
+            )
+
+        if status in active_statuses:
+            # Redirect user to the task loading view which will live-stream progress via WebSocket.
+            return render(request, "task_loading.html", context={"task_id": operation.id})
+
+        # Non-completed & not an active in-progress status => task likely failed / timed out / expired.
+        # We still show details, flagging that live progress is no longer available.
+        expired: bool = status not in active_statuses and status != completed_status
+        return render(
+            request,
+            "partial/operation_details.html",
+            context={
+                "operation": operation,
+                "active": False,
+                "expired_task": expired,
+            },
+        )
 
     operations = OperationsModel.objects.order_by("-started")
     paginator = Paginator(object_list=operations, per_page=10)

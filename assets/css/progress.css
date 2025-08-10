@@ -1,0 +1,3 @@
+/* Additional styling for large progress bar */
+.progress-lg { height: 24px; }
+.progress-lg .progress-bar { font-weight: 600; }

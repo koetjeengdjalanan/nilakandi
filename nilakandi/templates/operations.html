@@ -22,7 +22,9 @@
                     {% if operations %}
                         {% for op in operations %}
                             <tr style="cursor: pointer"
-                                onclick="window.location='{% url 'operations_details' op.id %}'">
+                                class="operation-row"
+                                data-operation-id="{{ op.id }}"
+                                data-detail-url="{% url 'operations_details' op.id %}">
                                 <td>{{ op.name|default:"-" }}</td>
                                 <td>{{ op.type|default:"-" }}</td>
                                 <td>{{ op.status|default:"-" }}</td>
@@ -39,6 +41,8 @@
                 </tbody>
             </table>
         </div>
+        <!-- Modal root dynamically populated -->
+        <div id="operation-modal-root"></div>
         {% if page_obj %}
             <nav aria-label="Operations pagination">
                 <ul class="pagination justify-content-center">

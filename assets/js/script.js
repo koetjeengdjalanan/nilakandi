@@ -1,7 +1,9 @@
 Dropzone.autoDiscover = false;
 
 document.addEventListener("DOMContentLoaded", function () {
-    const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+    // Safe CSRF token acquisition (may be absent on some pages like Operations)
+    const csrfTokenInput = document.querySelector("[name=csrfmiddlewaretoken]");
+    const csrfToken = csrfTokenInput ? csrfTokenInput.value : null;
     const dropzoneElement = document.querySelector("#byof-dropzone");
 
     if (dropzoneElement) {
@@ -136,4 +138,67 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         toast.show();
     }
+
+});
+
+// Operations modal handler (kept outside main DOMContentLoaded block so earlier errors don't block it)
+document.addEventListener('DOMContentLoaded', function () {
+    const tbody = document.querySelector('table.table-hover tbody');
+    if (!tbody) { return; }
+
+    function isModalMarkup(html) {
+        // Look for id or class to be more resilient to class list changes
+        return /id=["']operation-detail-modal["']/.test(html) || /class=["'][^"']*operation-modal/.test(html);
+    }
+
+    function injectAndShowModal(html, fallbackUrl, row) {
+        const root = document.getElementById('operation-modal-root');
+        if (!root) { window.location = fallbackUrl; return; }
+        root.innerHTML = html;
+        // Accept either id or class selectors
+        const modalEl = root.querySelector('#operation-detail-modal') || root.querySelector('.operation-modal');
+        if (!modalEl) { window.location = fallbackUrl; return; }
+        if (typeof bootstrap === 'undefined' || !bootstrap.Modal) { window.location = fallbackUrl; return; }
+        try {
+            const instance = bootstrap.Modal.getOrCreateInstance(modalEl, { backdrop: 'static' });
+            modalEl.addEventListener('hidden.bs.modal', () => { root.innerHTML = ''; });
+            instance.show();
+        } catch (e) {
+            console.error('Modal init failed, navigating instead', e);
+            window.location = fallbackUrl;
+        } finally {
+            if (row) row.classList.remove('table-active');
+        }
+    }
+
+    tbody.addEventListener('click', function (evt) {
+        const row = evt.target.closest('tr.operation-row');
+        if (!row) { return; }
+        const detailUrl = row.getAttribute('data-detail-url');
+        if (!detailUrl) { return; }
+        row.classList.add('table-active');
+        fetch(detailUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(resp => {
+                // If server responded with redirect (status 302/301), fallback
+                if (!resp.ok) {
+                    throw new Error('HTTP ' + resp.status);
+                }
+                return resp.text();
+            })
+            .then(html => {
+                if (isModalMarkup(html)) {
+                    injectAndShowModal(html, detailUrl, row);
+                } else {
+                    window.location = detailUrl;
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load operation details', err);
+                window.location = detailUrl;
+            })
+            .finally(() => {
+                // If modal path executed, row class removed in inject; else ensure remove here.
+                row.classList.remove('table-active');
+            });
+    });
 });
