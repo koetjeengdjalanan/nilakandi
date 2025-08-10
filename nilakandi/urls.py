@@ -1,3 +1,5 @@
+"""Collection of Nilakandi URLS."""
+
 from django.urls import include, path
 
 from . import apis, views
@@ -34,6 +36,8 @@ urlpatterns = [
             ]
         ),
     ),
+    path("operations/", views.operation_details_or_list, name="operations"),
+    path("operations/<uuid:ops_id>/", views.operation_details_or_list, name="operations_details"),
     path(
         "api/",
         include(

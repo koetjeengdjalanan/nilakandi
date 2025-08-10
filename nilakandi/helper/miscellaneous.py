@@ -1,3 +1,5 @@
+"""Miscellaneous helper functions."""
+
 import calendar
 import logging
 from datetime import datetime, timedelta
@@ -27,9 +29,7 @@ def wait_retry_after(retry_state: tenacity.RetryCallState) -> int:
     return 20
 
 
-def yearly_list(
-    start_date: datetime, end_date: datetime
-) -> list[tuple[datetime, datetime]]:
+def yearly_list(start_date: datetime, end_date: datetime) -> list[tuple[datetime, datetime]]:
     """Yearly list of dates between start_date and end_date.
 
     Args:
@@ -37,15 +37,14 @@ def yearly_list(
         end_date (datetime): End Date to generate the list.
 
     Raises:
-        ValueError: End date should always be greater then start date. Except in the event of time travels has ben invented.
+        ValueError: End date should always be greater then start date.
+                    Except in the event of time travels has ben invented.
 
     Returns:
         list[tuple[datetime, datetime]]: List of yearly dates.
     """
     if end_date < start_date:
-        raise ValueError(
-            "End date should be greater than start date", (start_date, end_date)
-        )
+        raise ValueError("End date should be greater than start date", (start_date, end_date))
     if end_date - start_date > timedelta(days=364):
         dates = [
             (
@@ -76,19 +75,15 @@ def yearly_list(
     else:
         dates = [
             (
-                datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)
-                ),
-                datetime.combine(
-                    end_date, datetime.max.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)
-                ),
+                datetime.combine(start_date, datetime.min.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)),
+                datetime.combine(end_date, datetime.max.time(), tzinfo=ZoneInfo(settings.TIME_ZONE)),
             )
         ]
     return dates
 
 
 def getlastmonth():
-    """currently used by sml procedure"""
+    """Currently used by sml procedure."""
     right_now = datetime.now()
 
     # first_day_current_month = dt(right_now.year, right_now.month, 1)
@@ -102,9 +97,7 @@ def getlastmonth():
 
     first_day_previous_month = datetime(year, previous_month, 1)
 
-    last_day_previous_month = datetime(
-        year, previous_month, calendar.monthrange(year, previous_month)[1]
-    )
+    last_day_previous_month = datetime(year, previous_month, calendar.monthrange(year, previous_month)[1])
 
     return first_day_previous_month, last_day_previous_month
 
@@ -113,8 +106,7 @@ def getlastmonth():
 
 
 def df_tohtml(df: pd.DataFrame, decimal: int = 16) -> str:
-    """
-    Convert a pandas DataFrame to HTML string with formatting.
+    """Convert a pandas DataFrame to HTML string with formatting.
 
     This function converts a pandas DataFrame to an HTML table with specific formatting:
     - Adds CSS classes for styling ('table table-striped')
@@ -129,7 +121,6 @@ def df_tohtml(df: pd.DataFrame, decimal: int = 16) -> str:
     Returns:
         str: HTML representation of the DataFrame or a message if the DataFrame is empty.
     """
-
     if df.empty:
         return "<pre>No Data</pre>"
 
@@ -141,9 +132,7 @@ def df_tohtml(df: pd.DataFrame, decimal: int = 16) -> str:
             classes.iloc[:-1, -1] += "fw-bold"
         # Append bold class to the entire row where the index is 'Grand Total'
         if "Grand Total" in data.index.get_level_values(0):
-            grand_total_indices = data.index[
-                data.index.get_level_values(0) == "Grand Total"
-            ]
+            grand_total_indices = data.index[data.index.get_level_values(0) == "Grand Total"]
             for idx in grand_total_indices:
                 classes.loc[idx] = classes.loc[idx].apply(lambda s: s + "fw-bold")
         # Append gray text class for cells with missing values or value "n/a".
@@ -154,12 +143,8 @@ def df_tohtml(df: pd.DataFrame, decimal: int = 16) -> str:
         return classes
 
     styled = (
-        df.style.format(
-            lambda x: f"{x:,.{decimal}f}".rstrip("0").rstrip("."), na_rep="n/a"
-        )
-        .set_table_attributes(
-            attributes='class="table table-striped table-hover report-table"'
-        )
+        df.style.format(lambda x: f"{x:,.{decimal}f}".rstrip("0").rstrip("."), na_rep="n/a")
+        .set_table_attributes(attributes='class="table table-striped table-hover report-table"')
         .set_table_styles(
             table_styles=[
                 {
@@ -177,6 +162,26 @@ def df_tohtml(df: pd.DataFrame, decimal: int = 16) -> str:
 
 
 def use_temporary_file_upload_handler(func):
+    """Decorator that forces Django to use TemporaryFileUploadHandler for file uploads.
+
+    This decorator replaces the default upload handlers in the request with a single
+    TemporaryFileUploadHandler, which stores uploaded files directly to disk rather
+    than keeping them in memory. This is useful for handling large file uploads that
+    might exceed memory limits.
+
+    Args:
+        func: The view function to decorate.
+
+    Returns:
+        The wrapped function that will use TemporaryFileUploadHandler for all file uploads.
+
+    Example:
+        @use_temporary_file_upload_handler
+        def upload_view(request):
+            # All file uploads in this view will be handled by TemporaryFileUploadHandler
+            # and stored on disk instead of in memory
+            ...
+    """
     from functools import wraps
 
     from django.core.files.uploadhandler import TemporaryFileUploadHandler
@@ -211,9 +216,7 @@ def download_file_from_azure(blob_name: str, container_name: str) -> Path:
     )
     def _download_with_retry():
         temp_file_path = file_path.with_suffix(file_path.suffix + ".tmp")
-        logging.getLogger("nilakandi.pull").info(
-            f"Downloading {blob_name} to {temp_file_path}"
-        )
+        logging.getLogger("nilakandi.pull").info(f"Downloading {blob_name} to {temp_file_path}")
 
         try:
             blob_properties = blob_client.get_blob_properties()
@@ -232,10 +235,7 @@ def download_file_from_azure(blob_name: str, container_name: str) -> Path:
                     target_file.write(chunk)
                     downloaded_bytes += len(chunk)
 
-                    if (
-                        blob_size > 100 * 1024 * 1024
-                        and downloaded_bytes % (50 * 1024 * 1024) == 0
-                    ):
+                    if blob_size > 100 * 1024 * 1024 and downloaded_bytes % (50 * 1024 * 1024) == 0:
                         progress_percent = (downloaded_bytes / blob_size) * 100
                         print(f"Downloaded {progress_percent:.1f}% of {blob_name}")
 
@@ -252,13 +252,9 @@ def download_file_from_azure(blob_name: str, container_name: str) -> Path:
                 temp_file_path.unlink()
             raise e
 
-    file_path = Path(settings.FILE_UPLOAD_TEMP_DIR).joinpath(
-        blob_name.replace("/", "_")
-    )
+    file_path = Path(settings.FILE_UPLOAD_TEMP_DIR).joinpath(blob_name.replace("/", "_"))
     if file_path.exists(follow_symlinks=True):
-        logging.getLogger("nilakandi.pull").info(
-            f"File {file_path} already exists, skipping download."
-        )
+        logging.getLogger("nilakandi.pull").info(f"File {file_path} already exists, skipping download.")
         return file_path
 
     auth = Auth(
@@ -283,9 +279,7 @@ def download_file_from_azure(blob_name: str, container_name: str) -> Path:
         retry_policy=enhanced_retry_policy,
     )
 
-    blob_client = service_client.get_blob_client(
-        container=container_name, blob=blob_name
-    )
+    blob_client = service_client.get_blob_client(container=container_name, blob=blob_name)
 
     _download_with_retry()
 

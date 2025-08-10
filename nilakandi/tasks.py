@@ -28,12 +28,12 @@ Requirements:
 import logging
 import os
 from datetime import datetime
-from functools import wraps
 from uuid import UUID
 
-from celery import current_task, shared_task
+from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from dateutil.relativedelta import relativedelta
+from django.conf import settings
 from pydantic_core import ValidationError
 
 from nilakandi.azure.api.costexport import ExportHistory, ExportOrCreate
@@ -45,53 +45,10 @@ from nilakandi.helper.miscellaneous import df_tohtml, yearly_list
 from nilakandi.helper.report_source_select import pivoting_data
 from nilakandi.models import ReportDataSourceEnum
 from nilakandi.models import Subscription as SubscriptionsModel
-
-
-def with_sub_name(task_func):
-    """Decorator for task functions that adds subscription name to task headers.
-
-    This decorator adds the subscription's display name to the task's headers
-    when a subscription_id is provided in the function arguments.
-    This information can be viewed in monitoring tools like Flower.
-
-    Parameters:
-        task_func (callable): The task function to be decorated.
-
-    Returns:
-        callable: The wrapped function that updates task headers before execution.
-    """
-
-    @wraps(task_func)
-    def wrapper(*args, **kwargs):
-        subscription_id = kwargs.get("subscription_id")
-        if subscription_id:
-            try:
-                subscription = SubscriptionsModel.objects.get(subscription_id=subscription_id).display_name
-                # Add subscription info to task headers
-                if hasattr(current_task.request, "headers"):
-                    if current_task.request.headers is None:
-                        current_task.request.headers = {}
-                    current_task.request.headers["subscription"] = subscription
-
-                # Add subscription to task info for logging/tracking
-                if not hasattr(current_task.request, "subscription"):
-                    setattr(current_task.request, "subscription", subscription)
-
-                # Log the subscription being processed
-                logging.getLogger("nilakandi.tasks").info(
-                    f"Processing {current_task.name} for subscription: {subscription}"
-                )
-            except Exception as e:
-                logging.getLogger("nilakandi.tasks").error(
-                    f"Error adding subscription info to task: {e}", exc_info=True
-                )
-        return task_func(*args, **kwargs)
-
-    return wrapper
+from nilakandi.task_handler import NilakandiTaskHandler
 
 
 @shared_task(name="nilakandi.tasks.grab_services")
-@with_sub_name
 def grab_services(
     bearer: str,
     subscription_id: UUID,
@@ -146,7 +103,6 @@ def grab_services(
 
 
 @shared_task(name="nilakandi.tasks.grab_marketplaces")
-@with_sub_name
 def grab_marketplaces(
     creds: dict[str, str],
     subscription_id: UUID,
@@ -202,7 +158,6 @@ def grab_marketplaces(
 
 
 @shared_task(name="nilakandi.tasks.cost_export")
-@with_sub_name
 def export_costs_to_blob(
     bearer: str,
     subscription_id: UUID,
@@ -247,7 +202,6 @@ def export_costs_to_blob(
     max_retries=5,
     default_retry_delay=60,
 )
-@with_sub_name
 def grab_cost_export_history(
     self,
     bearer: str,
@@ -295,7 +249,6 @@ def grab_cost_export_history(
 
 
 @shared_task(name="nilakandi.tasks.grab_blobs", bind=True, max_retries=5, default_retry_delay=60)
-@with_sub_name
 def grab_blobs(
     self,
     creds: dict[str, str],
@@ -367,7 +320,6 @@ def grab_blobs(
     default_retry_delay=60,
     acks_late=True,
 )
-@with_sub_name
 def process_blob(
     self,
     creds: dict[str, str],
@@ -426,12 +378,8 @@ def process_blob(
     return blobs.total_imported
 
 
-# TODO: Implement a more simplified task to handle report generation
 @shared_task(
-    name="nilakandi.tasks.make_report",
-    bind=True,
-    max_retries=5,
-    default_retry_delay=60,
+    name="nilakandi.tasks.make_report", bind=True, max_retries=5, default_retry_delay=60, base=NilakandiTaskHandler
 )
 def make_report(
     self,
@@ -493,8 +441,6 @@ def make_report(
         - Reports are stored in the database if the subscription exists
         - Temporary files are cleaned up after processing when using BYOF source
     """
-    from uuid import uuid4
-
     from django.core.cache import cache
     from pandas import DataFrame
     from psycopg2.extras import DateTimeTZRange
@@ -604,6 +550,7 @@ def make_report(
     subs_from_df = None
     if all_subs:
         subs_from_df = source_df.subscription_name.unique()
+        subs_from_df = subs_from_df[subs_from_df != "Unassigned"]
 
     meta_state["status"] = "Generating Reports..."
     meta_state["total"] = (
@@ -616,6 +563,7 @@ def make_report(
         else 0 + 1 if ReportTypeEnum.SUMMARY.value in reports else 0
     )
     self.update_state(state="PROGRESS", meta=meta_state)
+    generation_list: list[UUID] = []
 
     for subscription in [sub.display_name for sub in subscriptions] if not all_subs else subs_from_df:
         for report in reports:
@@ -623,11 +571,6 @@ def make_report(
                 exist_in_db: bool = SubscriptionsModel.objects.filter(display_name=subscription).exists()
                 if exist_in_db:
                     generated_report = GeneratedReportsModel.objects.create(
-                        id=(
-                            self.request.id
-                            if any((not multiple_reports, report == ReportTypeEnum.SUMMARY.value))
-                            else uuid4()
-                        ),
                         data_source=source,
                         subscription=SubscriptionsModel.objects.get(display_name=subscription),
                         report_type=report.lower(),
@@ -682,6 +625,9 @@ def make_report(
                     generated_report.status = GenerationStatusEnum.FAILED.value
                     generated_report.report_data = {"error": str(e)}
                     generated_report.save(update_fields=["status", "report_data"])
+            finally:
+                if exist_in_db:
+                    generation_list.append(generated_report.id if exist_in_db else None)
                 continue
         if ReportTypeEnum.SUMMARY.value in reports:
             reports.remove(ReportTypeEnum.SUMMARY.value)
@@ -692,10 +638,10 @@ def make_report(
         logging.getLogger("nilakandi.tasks").info(f"Saving report to cloud storage for {len(res)} reports")
         meta_state["status"] = "Creating Excel File..."
         self.update_state(state="PROGRESS", meta=meta_state)
-        excel_buffer = export_to_excel(inputs=res)
+        excel_buffer = export_to_excel(inputs=res, decimal_count=decimal_count)
         save_as_blob(file=excel_buffer, blobs_destination="Nilakandi-Result/")
 
-    if source == ReportDataSourceEnum.BYOF.value:
+    if len(file_list) > 0 and not settings.DEBUG:
         for file in file_list:
             try:
                 os.remove(file)
@@ -708,4 +654,5 @@ def make_report(
         "subscriptions": [sub.display_name for sub in subscriptions],
         "report_type": report_type,
         "time_range": (start_date, end_date),
+        "results": generation_list,
     }

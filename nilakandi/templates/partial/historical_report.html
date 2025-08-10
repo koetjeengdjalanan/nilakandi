@@ -25,14 +25,24 @@
                    hx-get="{% url 'report_lists' %}"
                    hx-target="#historical-report-container"
                    hx-swap="innerHTML"
-                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ page_obj.previous_page_number }} }'>Previous</a>
+                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": 1 }'>First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link"
+                   hx-get="{% url 'report_lists' %}"
+                   hx-target="#historical-report-container"
+                   hx-swap="innerHTML"
+                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ page_obj.previous_page_number }} }'><</a>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">...</span>
             </li>
         {% else %}
             <li class="page-item disabled">
-                <span class="page-link">Previous</span>
+                <span class="page-link"><</span>
             </li>
         {% endif %}
-        {% for num in page_obj.paginator.page_range %}
+        {% for num in page_range %}
             {% if num == page_obj.number %}
                 <li class="page-item active">
                     <span class="page-link">{{ num }}</span>
@@ -48,16 +58,26 @@
             {% endif %}
         {% endfor %}
         {% if page_obj.has_next %}
+            <li class="page-item disabled">
+                <span class="page-link">...</span>
+            </li>
             <li class="page-item">
                 <a class="page-link"
                    hx-get="{% url 'report_lists' %}"
                    hx-target="#historical-report-container"
                    hx-swap="innerHTML"
-                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ page_obj.next_page_number }} }'>Next</a>
+                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ page_obj.next_page_number }} }'>></a>
+            </li>
+            <li class="page-item">
+                <a class="page-link"
+                   hx-get="{% url 'report_lists' %}"
+                   hx-target="#historical-report-container"
+                   hx-swap="innerHTML"
+                   hx-vals='js:{"include_deleted": document.querySelector("#include_deleted").checked, "page": {{ max_pages }} }'>Last</a>
             </li>
         {% else %}
             <li class="page-item disabled">
-                <span class="page-link">Next</span>
+                <span class="page-link">></span>
             </li>
         {% endif %}
     </ul>

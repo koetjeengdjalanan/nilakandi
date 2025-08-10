@@ -1,7 +1,9 @@
+"""Nilakandi Views Module."""
+
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from nilakandi.models import Marketplace as MarketplacesModel
 from nilakandi.models import Services as ServicesModel
@@ -13,6 +15,18 @@ from .helper.serve_data import SubsData
 
 
 def home(request):
+    """Render dashboard home page with recent generated reports and report form.
+
+    Parameters
+    ----------
+    request : HttpRequest
+        Incoming HTTP request.
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered home.html template.
+    """
     from nilakandi.forms import ReportForm
     from nilakandi.models import GeneratedReports as GeneratedReportsModel
 
@@ -38,9 +52,7 @@ def home(request):
                 "report_type": gen.report_type,
                 "status": gen.status,
                 "time_range": (
-                    f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}"
-                    if gen.time_range
-                    else "N/A"
+                    f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}" if gen.time_range else "N/A"
                 ),
                 "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -53,6 +65,17 @@ def home(request):
 
 
 def subscriptions(request):
+    """List all subscriptions.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered subscriptions.html displaying subscriptions table.
+    """
     subs = SubscriptionsModel.objects.all()
     data = {
         "subs": subs,
@@ -63,6 +86,19 @@ def subscriptions(request):
 
 
 def subscription_details(request, subsId):
+    """Show detailed pivot reports for a specific subscription.
+
+    Parameters
+    ----------
+    request : HttpRequest
+    subsId : str
+        Subscription ID (subscription_id field).
+
+    Returns:
+    -------
+    HttpResponse | None
+        Rendered subsreport.html or None if subscription not found (redirect initiated).
+    """
     try:
         sub = SubscriptionsModel.objects.get(subscription_id=subsId)
     except SubscriptionsModel.DoesNotExist:
@@ -80,6 +116,24 @@ def subscription_details(request, subsId):
 
 
 def services(request):
+    """Paginated listing of services cost records.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Query Params
+    ------------
+    perPage : int, optional
+        Items per page (default 10).
+    page : int, optional
+        Page number.
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered servicesCost.html.
+    """
     services = ServicesModel.objects.all()
     perPage = request.GET.get("perPage", 10)
     paginanator = Paginator(object_list=services, per_page=perPage)
@@ -95,6 +149,17 @@ def services(request):
 
 
 def getSubcriptions(request):
+    """Fetch subscriptions from Azure and persist them.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    JsonResponse
+        JSON containing fetched subscription data.
+    """
     auth = Auth(
         client_id=settings.AZURE_CLIENT_ID,
         client_secret=settings.AZURE_CLIENT_SECRET,
@@ -106,18 +171,62 @@ def getSubcriptions(request):
 
 
 def testAPI(request):
+    """Simple test endpoint that echoes POST payload structure.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    JsonResponse
+        Echo data.
+    """
     print(request.POST)
     print(type(request.POST.getlist("file_list", [])))
     return JsonResponse({"data": "ok", "req": request.POST})
 
 
 def marketplace(request):
+    """Placeholder marketplace view (currently incomplete).
+
+    Iterates subscriptions to trigger marketplace related lazy operations (no response).
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    None
+        No HTTP response currently (likely bug / TODO).
+    """
     subs = SubscriptionsModel.objects.all()
     for sub in subs:
         sub.objects.marketplace
 
 
 def historical_report(request):
+    """Paginated and searchable list of historical generated reports (partial view).
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Query Params
+    ------------
+    include_deleted : bool
+        Include soft-deleted reports if true.
+    keyword : str
+        Optional search keyword.
+    page : int
+        Page number.
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered partial/historical_report.html.
+    """
     from django.core.paginator import Paginator
 
     from nilakandi.models import GeneratedReports as GeneratedReportsModel
@@ -125,10 +234,7 @@ def historical_report(request):
     gen_reports = GeneratedReportsModel.objects.order_by("-created_at")
     deleted = request.GET.get("include_deleted", "false").lower() == "true"
     gen_reports = gen_reports.filter(deleted=False) if not deleted else gen_reports
-    if (
-        request.GET.get("keyword", None) is not None
-        and request.GET.get("keyword", "").strip() != ""
-    ):
+    if request.GET.get("keyword", None) is not None and request.GET.get("keyword", "").strip() != "":
         from django.contrib.postgres.search import SearchVector
 
         keyword = request.GET.get("keyword", "").strip()
@@ -144,8 +250,14 @@ def historical_report(request):
     paginator = Paginator(gen_reports, 10)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+    current_page = page_obj.number if page_obj else 1
+    start_page = max(current_page - 5, 1)
+    end_page = min(current_page + 5, paginator.num_pages)
+    limited_pages_range = range(start_page, end_page + 1)
     data = {
         "page_obj": page_obj,
+        "page_range": limited_pages_range,
+        "max_pages": paginator.num_pages,
         "deleted": deleted,
         "headers": [
             "Data Source",
@@ -163,9 +275,7 @@ def historical_report(request):
                 "report_type": gen.report_type,
                 "status": gen.status,
                 "time_range": (
-                    f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}"
-                    if gen.time_range
-                    else "N/A"
+                    f"{gen.time_range.lower.date()} - {gen.time_range.upper.date()}" if gen.time_range else "N/A"
                 ),
                 "created_at": gen.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -176,10 +286,39 @@ def historical_report(request):
 
 
 def view_report(request, id):
+    """Render a simple placeholder page for a specific report.
+
+    Parameters
+    ----------
+    request : HttpRequest
+    id : int | str
+        Generated report identifier.
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered blank.html.
+    """
     return render(request, "blank.html", context={"id": id})
 
 
 def summary(request):
+    """Generate and render summary pivot report.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    POST Params
+    -----------
+    decimal_count : int
+        Optional decimal precision for numeric formatting.
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered blank.html with pivot HTML.
+    """
     from nilakandi.helper.report_generation import summary as summaryReport
 
     print(type(request))
@@ -188,14 +327,23 @@ def summary(request):
     if request.method == "POST":
         decimal_count = int(request.POST.get("decimal_count", 8))
     data = {
-        "pivot": df_tohtml(
-            df=summaryReport(), decimal=decimal_count if decimal_count else 16
-        ),
+        "pivot": df_tohtml(df=summaryReport(), decimal=decimal_count if decimal_count else 16),
     }
     return render(request, "blank.html", context=data)
 
 
 def services_report(request):
+    """Generate services cost pivot report.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered blank.html with services pivot.
+    """
     from nilakandi.helper.report_generation import services as servicesReport
 
     data = {
@@ -205,6 +353,17 @@ def services_report(request):
 
 
 def marketplaces_report(request):
+    """Generate marketplaces cost pivot report.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered blank.html with marketplaces pivot.
+    """
     from nilakandi.helper.report_generation import marketplaces as marketplacesReport
 
     data = {
@@ -214,9 +373,18 @@ def marketplaces_report(request):
 
 
 def virtualmachines_report(request):
-    from nilakandi.helper.report_generation import (
-        virtual_machine as virtualmachinesReport,
-    )
+    """Generate virtual machines cost pivot report.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered blank.html with virtual machines pivot.
+    """
+    from nilakandi.helper.report_generation import virtual_machine as virtualmachinesReport
 
     data = {
         "pivot": df_tohtml(virtualmachinesReport()),
@@ -225,6 +393,17 @@ def virtualmachines_report(request):
 
 
 def testForms(request):
+    """Render a test page showing the report form.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    HttpResponse
+        Rendered testform.html containing the form.
+    """
     from nilakandi.forms import ReportForm
 
     form = ReportForm()
@@ -235,6 +414,17 @@ def testForms(request):
 
 
 def list_blobs_from_azure(request):
+    """List CSV blobs per container from Azure Blob Storage.
+
+    Parameters
+    ----------
+    request : HttpRequest
+
+    Returns:
+    -------
+    HttpResponse | None
+        Rendered partial/blob_list.html with blob metadata or None if no blobs.
+    """
     from nilakandi.helper.azure_api import Auth
     from nilakandi.helper.azure_blob import Blobs
 
@@ -253,22 +443,14 @@ def list_blobs_from_azure(request):
     for container in containers:
         try:
             container_name = container.get("name")
-            files = blobs.blob_service_client.get_container_client(
-                container=container_name
-            ).list_blobs()
+            files = blobs.blob_service_client.get_container_client(container=container_name).list_blobs()
             blob_list.append(
                 {
                     "container": container_name,
-                    "files": [
-                        doc.get("name")
-                        for doc in files
-                        if doc.get("name").endswith(".csv")
-                    ],
+                    "files": [doc.get("name") for doc in files if doc.get("name").endswith(".csv")],
                 }
             )
-            subscriptions = SubscriptionsModel.objects.values_list(
-                "display_name", flat=True
-            )
+            subscriptions = SubscriptionsModel.objects.values_list("display_name", flat=True)
         except Exception as e:
             print(e)
         finally:
@@ -280,3 +462,41 @@ def list_blobs_from_azure(request):
         "partial/blob_list.html",
         context={"blobs": blob_list, "subscriptions": subscriptions},
     )
+
+
+def operation_details_or_list(request, ops_id=None):
+    """Operation Viewer.
+
+    Display details for a specific operation if ops_id is provided (context key: 'operation'),
+    otherwise list all operations with pagination (context key: 'operations').
+
+    Parameters
+    ----------
+    request : HttpRequest
+        The HTTP request object.
+    ops_id : str or None
+        The UUID of the operation to display details for, or None to list all operations.
+
+    Returns:
+        HttpResponse: Rendered HTML page with operation details or a paginated list of operations.
+    """
+    from uuid import UUID
+
+    from django.core.paginator import Paginator
+
+    from nilakandi.models import Operation as OperationsModel
+
+    if ops_id:
+        raise NotImplementedError("Operation details view is not implemented yet.")
+        operation = get_object_or_404(OperationsModel, id=UUID(ops_id))
+        return render(request, "partial/operation_details.html", context={"operation": operation})
+
+    operations = OperationsModel.objects.order_by("-started")
+    paginator = Paginator(object_list=operations, per_page=10)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    context = {
+        "operations": page_obj.object_list,
+        "page_obj": page_obj,
+    }
+    return render(request, "operations.html", context=context)

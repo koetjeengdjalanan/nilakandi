@@ -24,12 +24,11 @@ class ApiResult(BaseModel):
     meta: Optional[Dict[str, str | None]] = None
     next_link: Optional[str] = None
     raw: Optional[Union[List[Dict[str, Any]], Dict[str, Any]]] = None
-    data: PandasDataFrame = pd.DataFrame()
+    data: PandasDataFrame = Field(default_factory=pd.DataFrame)
 
 
 class BlobsInfo(BaseModel):
-    """
-    BlobsInfo is a Pydantic model that represents information about a blob.
+    """BlobsInfo is a Pydantic model that represents information about a blob.
 
     Attributes:
         blob_name (str): The name of the blob. This field is populated using the alias "blobName".

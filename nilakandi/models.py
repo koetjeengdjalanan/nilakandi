@@ -1,3 +1,5 @@
+"""Nilakandi Models Collection."""
+
 import uuid
 from enum import Enum
 
@@ -7,17 +9,18 @@ from django.db import models
 
 
 class Subscription(models.Model):
-    """
-    Subscription model representing a subscription entity.
+    """Subscription model representing a subscription entity.
 
     Attributes:
         subscription_id (UUIDField): Primary key, unique identifier for the subscription.
         id (CharField): Unique identifier for the subscription, max length of 100 characters.
         display_name (CharField): Display name of the subscription.
         state (CharField): State of the subscription.
-        subscription_policies (JSONField): JSON field to store subscription policies, can be null or blank, defaults to an empty dictionary.
+        subscription_policies (JSONField): JSON field to store subscription policies, can be null or blank, defaults to
+                                           an empty dictionary.
         authorization_source (CharField): Source of authorization for the subscription.
-        additional_properties (JSONField): JSON field to store additional properties, can be null or blank, defaults to an empty dictionary.
+        additional_properties (JSONField): JSON field to store additional properties, can be null or blank, defaults to
+                                           an empty dictionary.
         last_edited (DateTimeField): Timestamp of the last edit, automatically updated.
         added (DateTimeField): Timestamp of when the subscription was added, automatically set and not editable.
 
@@ -39,15 +42,17 @@ class Subscription(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
     def __str__(self):
+        """Returns the display name of the subscription."""
         return self.display_name
 
     class Meta:
+        """Meta options for the Subscription model."""
+
         unique_together = ["subscription_id", "id", "display_name"]
 
 
 class Services(models.Model):
-    """
-    Represents a service usage record in the system.
+    """Represents a service usage record in the system.
 
     Attributes:
         id (UUIDField): The unique identifier for the service record.
@@ -70,7 +75,8 @@ class Services(models.Model):
         __str__: Returns the string representation of the service record.
 
     Meta:
-        unique_together: Ensures that the combination of subscription, usage_date, service_name, resource_id, service_tier, and meter is unique.
+        unique_together: Ensures that the combination of subscription, usage_date, service_name, resource_id,
+                        service_tier, and meter is unique.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -95,9 +101,12 @@ class Services(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
     def __str__(self):
+        """Returns the string representation of the service record."""
         return self.id
 
     class Meta:
+        """Meta options for the Services model."""
+
         unique_together = [
             "subscription",
             "usage_date",
@@ -109,25 +118,45 @@ class Services(models.Model):
 
 
 class Operation(models.Model):
+    """Represents an operation or task within the system.
+
+    This model tracks execution operations with their status, timing information,
+    and results. Operations have a unique identifier, name, type, and status,
+    along with timestamps for tracking when they started and completed.
+
+    Attributes:
+        id (UUIDField): Unique identifier for the operation (auto-generated).
+        name (CharField): Name of the operation.
+        type (CharField): Type or category of the operation.
+        status (CharField): Current status of the operation.
+        started (DateTimeField): When the operation started.
+        completed (DateTimeField): When the operation completed.
+        duration (DurationField): How long the operation took to execute.
+        error (JSONField): Error information if the operation failed (nullable).
+        output (JSONField): Output or result data from the operation (nullable).
+        last_edited (DateTimeField): When the operation was last modified.
+        added (DateTimeField): When the operation was added to the system.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField()
     type = models.CharField()
     status = models.CharField()
     started = models.DateTimeField()
-    completed = models.DateTimeField()
-    duration = models.DurationField()
+    completed = models.DateTimeField(null=True, blank=True)
+    duration = models.DurationField(null=True, blank=True)
     error = models.JSONField(null=True, default=dict, blank=True)
     output = models.JSONField(null=True, default=dict, blank=True)
     last_edited = models.DateTimeField(auto_now=True)
     added = models.DateTimeField(auto_now=True, editable=False)
 
     def __str__(self):
+        """Returns the name of the operation."""
         return self.name
 
 
 class Marketplace(models.Model):
-    """
-    Marketplace model representing various attributes related to a marketplace subscription.
+    """Marketplace model representing various attributes related to a marketplace subscription.
 
     Attributes:
         id (UUIDField): Primary key for the Marketplace model.
@@ -166,7 +195,8 @@ class Marketplace(models.Model):
         __str__: Returns the name of the marketplace.
 
     Meta:
-        unique_together: Ensures uniqueness for the combination of subscription, source_id, name, usage_start, billing_period_id, and instance_id.
+        unique_together: Ensures uniqueness for the combination of subscription, source_id, name, usage_start,
+                         billing_period_id, and instance_id.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -193,9 +223,7 @@ class Marketplace(models.Model):
     offer_name = models.CharField()
     resource_group = models.CharField()
     additional_info = models.JSONField(null=True, default=dict, blank=True)
-    order_number = models.UUIDField(
-        default=uuid.uuid4, editable=True, null=True, blank=True
-    )
+    order_number = models.UUIDField(default=uuid.uuid4, editable=True, null=True, blank=True)
     instance_name = models.CharField(null=True)
     instance_id = models.CharField(null=True)
     currency = models.CharField(default="USD")
@@ -215,9 +243,12 @@ class Marketplace(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
     def __str__(self):
+        """Returns the name of the marketplace."""
         return self.name
 
     class Meta:
+        """Meta options for the Marketplace model."""
+
         unique_together = [
             "subscription",
             "source_id",
@@ -229,6 +260,40 @@ class Marketplace(models.Model):
 
 
 class VirtualMachine(models.Model):
+    """Django model representing a Virtual Machine resource.
+
+    This model stores information about virtual machines, typically from a cloud provider
+    like Azure. It captures details about the VM configuration, resources, network settings,
+    and other properties needed for management and monitoring.
+
+    Attributes:
+        id (UUIDField): Primary key for the VM record.
+        subscription (ForeignKey): Link to the Subscription this VM belongs to.
+        vm_subs_id (CharField): VM subscription identifier.
+        name (CharField): Name of the virtual machine.
+        type (CharField): Type of the virtual machine.
+        location (CharField): Geographic location of the VM.
+        tags (JSONField): Custom tags associated with the VM.
+        resources (JSONField): Resource configurations and allocations.
+        identity (JSONField): Identity settings for the VM.
+        zones (JSONField): Availability zones configuration.
+        etag (CharField): Entity tag for optimistic concurrency control.
+        hardware_profile (JSONField): CPU, memory and hardware settings.
+        storage_profile (JSONField): Disk and storage configurations.
+        os_profile (JSONField): Operating system settings.
+        network_profile (JSONField): Network interface configurations.
+        diagnostic_profile (JSONField): Monitoring and diagnostic settings.
+        provisioning_state (CharField): Current state of VM provisioning.
+        license_type (CharField): Type of license used.
+        vm_id (CharField): Provider-specific VM identifier.
+        time_created (TimeField): Time when the VM was created.
+        security_profile (JSONField): Security settings and configurations.
+        additional_capabilities (JSONField): Extra VM capabilities.
+        plan (JSONField): Plan information if the VM is from a marketplace image.
+        last_edited (DateTimeField): Timestamp of the last edit to this record.
+        added (DateTimeField): Timestamp when this VM was added to the system.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -262,6 +327,38 @@ class VirtualMachine(models.Model):
 
 
 class VirtualMachineCost(models.Model):
+    """A model representing cost information for virtual machines in a cloud environment.
+
+    This model stores detailed billing and cost data for virtual machines, including
+    resource identifiers, subscription details, metering information, and associated costs.
+
+    Attributes:
+        id (UUIDField): Primary key for the cost record
+        subscription (ForeignKey): Reference to the Subscription model
+        resource_id (CharField): Identifier for the resource (nullable)
+        resource_type (CharField): Type of the resource
+        resource_group (CharField): Resource group identifier
+        service_name (CharField): Name of the service
+        resource_group_name (CharField): Name of the resource group
+        resource_location (CharField): Geographic location of the resource
+        consumed_service (CharField): The service that was consumed
+        meter_id (CharField): Identifier for the meter used for billing
+        meter_category (CharField): Category of the meter
+        meter_sub_category (CharField): Sub-category of the meter
+        meter (CharField): Meter name
+        department_name (CharField): Name of the department
+        subscription_name (CharField): Name of the subscription
+        currency (CharField): Currency used for billing
+        billing_month (DateField): Month for which billing is recorded
+        pretax_cost (FloatField): Cost before taxes
+        last_edited (DateTimeField): Timestamp of the last edit
+        added (DateTimeField): Timestamp when the record was added
+
+    Note:
+        This model enforces uniqueness based on the combination of billing_month,
+        resource_id, and meter_id to prevent duplicate cost entries.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
         to=Subscription,
@@ -289,10 +386,12 @@ class VirtualMachineCost(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
     """
-        Constraint unique keys based on 
+        Constraint unique keys based on
     """
 
     class Meta:
+        """Meta options for the VirtualMachineCost model."""
+
         constraints = [
             models.UniqueConstraint(
                 fields=["billing_month", "resource_id", "meter_id"],
@@ -302,8 +401,7 @@ class VirtualMachineCost(models.Model):
 
 
 class ExecTypeEnum(Enum):
-    """
-    ExecTypeEnum is an enumeration that defines the types of execution modes available.
+    """ExecTypeEnum is an enumeration that defines the types of execution modes available.
 
     Attributes:
         ON_DEMAND (str): Represents an execution mode that is triggered manually.
@@ -315,8 +413,8 @@ class ExecTypeEnum(Enum):
 
 
 class ExecStatusEnum(Enum):
-    """
-    ExecStatusEnum is an enumeration that represents the various execution statuses
+    """ExecStatusEnum is an enumeration that represents the various execution statuses.
+
     that a process or task can have.
 
     Attributes:
@@ -339,8 +437,7 @@ class ExecStatusEnum(Enum):
 
 
 class ExportHistory(models.Model):
-    """
-    Model representing the export history of a subscription.
+    """Model representing the export history of a subscription.
 
     Attributes:
         id (UUIDField): Primary key, originally called name.
@@ -352,23 +449,24 @@ class ExportHistory(models.Model):
         submitted (DateTimeField): Submission time, originally called properties.submittedTime.
         proc_start_time (DateTimeField): Processing start time, originally called properties.processingStartTime.
         proc_end_time (DateTimeField): Processing end time, originally called properties.processingEndTime.
-        report_datetime_range (DateTimeRangeField): Date range for the report, originally called properties.startDate & properties.endDate.
+        report_datetime_range (DateTimeRangeField): Date range for the report, originally called properties.startDate &
+                                                    properties.endDate.
         run_settings (HStoreField): Run settings, originally called properties.runSettings.
         last_edited (DateTimeField): Timestamp of the last edit, auto-updated.
         added (DateTimeField): Timestamp of when the record was added, auto-updated and not editable.
 
     Methods:
-        __str__: Returns a string representation of the export history, including subscription name and report date range.
+        __str__: Returns a string representation of the export history,
+                 including subscription name and report date range.
 
     Meta:
         required_db_vendor: Specifies that the required database vendor is PostgreSQL.
         unique_together: Ensures that the combination of subscription and exec_string is unique.
-        indexes: Defines indexes on exec_status and submitted, exec_type and submitted, and exec_type, exec_status, and submitted.
+        indexes: Defines indexes on exec_status and submitted, exec_type and submitted, and exec_type,
+                 exec_status, and submitted.
     """
 
-    id = models.UUIDField(
-        primary_key=True, default=uuid.uuid4, db_comment="Originally called name"
-    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, db_comment="Originally called name")
     subscription = models.ForeignKey(
         to=Subscription,
         to_field="subscription_id",
@@ -390,9 +488,7 @@ class ExportHistory(models.Model):
         choices=[(e.value, e.name) for e in ExecStatusEnum],
         db_comment="Originally called properties.status",
     )
-    submitted = models.DateTimeField(
-        db_comment="Originally called properties.submittedTime"
-    )
+    submitted = models.DateTimeField(db_comment="Originally called properties.submittedTime")
     proc_start_time = models.DateTimeField(
         null=True,
         blank=True,
@@ -403,9 +499,7 @@ class ExportHistory(models.Model):
         blank=True,
         db_comment="Originally called properties.processingEndTime",
     )
-    report_datetime_range = DateTimeRangeField(
-        db_comment="Originally called properties.startDate & properties.endDate"
-    )
+    report_datetime_range = DateTimeRangeField(db_comment="Originally called properties.startDate & properties.endDate")
     run_settings = models.JSONField(
         default=dict,
         db_comment="Originally called properties.runSettings",
@@ -414,10 +508,13 @@ class ExportHistory(models.Model):
     added = models.DateTimeField(auto_now=True, editable=False)
 
     def __str__(self):
+        """Returns a string representation of the export history."""
         start, end = self.report_datetime_range.lower, self.report_datetime_range.upper
         return f"{self.subscription} - {start} to {end}"
 
     class Meta:
+        """Meta options for the ExportHistory model."""
+
         required_db_vendor = "postgresql"
         unique_together = ["subscription", "exec_string"]
         indexes = [
@@ -428,8 +525,7 @@ class ExportHistory(models.Model):
 
 
 class ExportReport(models.Model):
-    """
-    Model representing an export report with detailed billing information.
+    """Model representing an export report with detailed billing information.
 
     Attributes:
         id (UUIDField): Primary key, unique identifier for the report.
@@ -568,16 +664,14 @@ class ExportReport(models.Model):
     account_id = models.BigIntegerField(null=False)
 
     def __getattr__(self, name):
-        # Convert CamelCase to snake_case
+        """Converts CamelCase attribute names to snake_case."""
         snake_case_name = to_snake(name)
         if snake_case_name in self.__dict__:
             return self.__dict__[snake_case_name]
-        raise AttributeError(
-            f"'{self.__class__.__name__}' object has no attribute '{name}'"
-        )
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        # Convert CamelCase to snake_case
+        """Converts CamelCase attribute names to snake_case and sets the value."""
         snake_case_name = to_snake(name)
         if snake_case_name in self.__dict__:
             self.__dict__[snake_case_name] = value
@@ -595,8 +689,7 @@ class ExportReport(models.Model):
 
 
 class ReportTypeEnum(Enum):
-    """
-    ReportTypeEnum is an enumeration that defines the types of reports available.
+    """ReportTypeEnum is an enumeration that defines the types of reports available.
 
     Attributes:
         SUMMARY (str): Represents a summary report.
@@ -611,8 +704,7 @@ class ReportTypeEnum(Enum):
     VIRTUAL_MACHINES = "VirtualMachines"
 
     def all():
-        """
-        Returns a list of all report types as strings.
+        """Returns a list of all report types as strings.
 
         Returns:
             list: A list containing all report type values.
@@ -621,8 +713,7 @@ class ReportTypeEnum(Enum):
 
 
 class GenerationStatusEnum(Enum):
-    """
-    GenerationStatusEnum is an enumeration that defines the status of report generation.
+    """GenerationStatusEnum is an enumeration that defines the status of report generation.
 
     Attributes:
         PENDING (str): Indicates that the report generation is pending.
@@ -639,8 +730,7 @@ class GenerationStatusEnum(Enum):
     STALE = "Stale"
 
     def all():
-        """
-        Returns a list of all generation statuses as strings.
+        """Returns a list of all generation statuses as strings.
 
         Returns:
             list: A list containing all generation status values.
@@ -649,8 +739,7 @@ class GenerationStatusEnum(Enum):
 
 
 class ReportDataSourceEnum(Enum):
-    """
-    ReportDataSourceEnum is an enumeration that defines the data sources for report generation.
+    """ReportDataSourceEnum is an enumeration that defines the data sources for report generation.
 
     Attributes:
         DB (str): Represents the database as the data source.
@@ -663,8 +752,7 @@ class ReportDataSourceEnum(Enum):
     BYOF = "upload"
 
     def all():
-        """
-        Returns a list of all report data sources as strings.
+        """Returns a list of all report data sources as strings.
 
         Returns:
             list: A list containing all report data source values.
@@ -673,8 +761,7 @@ class ReportDataSourceEnum(Enum):
 
 
 class GeneratedReports(models.Model):
-    """
-    Model for storing generated reports in the system.
+    """Model for storing generated reports in the system.
 
     This model stores information about reports that have been generated for subscriptions,
     including their type, status, data source, and the actual report data.
@@ -721,8 +808,11 @@ class GeneratedReports(models.Model):
     deleted = models.BooleanField(default=False)
 
     def __str__(self):
+        """Returns a string representation of the generated report."""
         return f"{self.subscription} - {self.report_type} [{self.time_range.lower} to {self.time_range.upper}]"
 
     class Meta:
+        """Meta options for the GeneratedReports model."""
+
         required_db_vendor = "postgresql"
         ordering = ["-created_at"]

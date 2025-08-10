@@ -1,5 +1,4 @@
-"""
-ASGI config for nttXsml project.
+"""ASGI config for nttXsml project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -11,6 +10,9 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.django.base.local")
+os.environ.setdefault(
+    "DJANGO_SETTINGS_MODULE",
+    os.getenv("DJANGO_SETTINGS_MODULE", "config.django.local"),
+)
 
 application = get_asgi_application()

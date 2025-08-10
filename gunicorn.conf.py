@@ -1,3 +1,9 @@
+"""Gunicorn Setting.
+
+This configuration is optimized for handling large file uploads and reducing memory pressure.
+Don't Change before contacting the project head or code owner!
+"""
+
 import multiprocessing
 import os
 
@@ -6,7 +12,7 @@ bind = f"0.0.0.0:{os.getenv('PORT', '21180')}"
 
 # Worker processes - reduce to avoid memory pressure
 workers = min(multiprocessing.cpu_count() + 1, 5)  # Limit maximum workers
-worker_class = "sync"
+worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
 
 # Timeout settings for large file uploads (6 hours)
@@ -30,7 +36,7 @@ access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"
 
 # Process naming
 proc_name = "nilakandi-gunicorn"
-threads = int(os.environ.get("GUNICORN_THREADS", "4"))
+# threads = int(os.environ.get("GUNICORN_THREADS", "4"))
 
 # Limits for large file uploads
 limit_request_line = 8190
@@ -40,6 +46,17 @@ limit_request_field_size = 16384
 
 # Add a post-fork hook to ensure proper handling of child processes
 def post_fork(server, worker):
+    """Post-fork hook for Gunicorn worker processes.
+
+    Logs the spawning of a new worker and attempts to restrict its maximum
+    address space to 2 GiB to control memory usage. If the `resource` module
+    is unavailable or setting the limit fails, the error is silently ignored.
+
+    Args:
+        server: The Gunicorn Arbiter instance managing the server.
+        worker: The newly forked worker process instance.
+
+    """
     server.log.info("Worker spawned (pid: %s)", worker.pid)
 
     # Set lower memory limit for worker

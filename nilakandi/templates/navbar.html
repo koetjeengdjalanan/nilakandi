@@ -1,4 +1,3 @@
-
 <nav class="navbar navbar-expand-lg bg-body-tertiary my-2 sticky-top">
   <div class="container-fluid">
     <a class="navbar-brand" href={% url "home" %}>
@@ -12,7 +11,7 @@
             type="button"
             data-bs-toggle="collapse"
             data-bs-target="#navbarSupportedContent"
-            aria-controls="navbarSupportedContent"
+            aria-controls="navbarSupportedContent"    
             aria-expanded="false"
             aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
@@ -23,16 +22,15 @@
           <a class="nav-link active" aria-current="page" href={% url "home" %}>Home</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link active"
-             aria-current="page"
-             href="{% url 'subscriptions' %}">Subscriptions</a>
+          <a class="nav-link" aria-current="page" href="{% url 'subscriptions' %}">Subscriptions</a>
         </li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle"
-             href="#"
-             role="button"
-             data-bs-toggle="dropdown"
-             aria-expanded="false">Reports Views</a>
+        <li class="nav-item">
+          <a class="nav-link"
+             aria-current="page"
+             href="{% url 'operations' %}">Operations</a>
+        </li>
+        {% comment %} <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Operations</a>
           <ul class="dropdown-menu">
             <li>
               <a class="dropdown-item" href="#">Services</a>
@@ -44,14 +42,10 @@
               <hr class="dropdown-divider" />
             </li>
             <li>
-              <a class="dropdown-item disabled"
-                 aria-disabled="true"
-                 data-bs-toggle="tooltip"
-                 data-bs-placement="right"
-                 data-bs-title="Method is not implemented yet">Auto</a>
+              <a class="dropdown-item disabled" aria-disabled="true" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Method is not implemented yet">Auto</a>
             </li>
           </ul>
-        </li>
+        </li> {% endcomment %}
         <li class="nav-item">
           <a class="nav-link disabled" aria-disabled="true">Disabled</a>
         </li>
@@ -66,4 +60,3 @@
     </div>
   </div>
 </nav>
-

@@ -1,5 +1,4 @@
 # flake8: noqa
-from azure.identity import ClientSecretCredential, TokenCachePersistenceOptions
 
 from .base import *
 
@@ -15,40 +14,7 @@ SKIPPABLE_HTTP_ERROR: list[int] = [
     501,  # Not Implemented
     504,  # Gateway Timeout
 ]
-EARLIEST_DATA: str = (
-    env("EARLIEST_DATA", default="20200101") if not DEBUG else "20250101"
-)
-
-STORAGES["azures-storages"] = {
-    "BACKEND": "storages.backends.azure_storage.AzureStorage",
-    "OPTIONS": {
-        "token_credential": ClientSecretCredential(
-            tenant_id=env("AZURE_TENANT_ID"),
-            client_id=env("AZURE_CLIENT_ID"),
-            client_secret=env("AZURE_CLIENT_SECRET"),
-            cache_persistence_options=TokenCachePersistenceOptions(
-                allow_unencrypted_storage=True, name="nilakandi-azure-token"
-            ),
-        ),
-        "account_name": env("AZURE_STORAGE_ACCOUNT_NAME", default="nilakandi"),
-        "azure_container": env("AZURE_STORAGE_CONTAINER", default="nilakandi"),
-    },
-}
-STORAGES["result-blobs"] = {
-    "BACKEND": "storages.backends.azure_storage.AzureStorage",
-    "OPTIONS": {
-        "token_credential": ClientSecretCredential(
-            tenant_id=env("AZURE_TENANT_ID"),
-            client_id=env("AZURE_CLIENT_ID"),
-            client_secret=env("AZURE_CLIENT_SECRET"),
-            cache_persistence_options=TokenCachePersistenceOptions(
-                allow_unencrypted_storage=True, name="nilakandi-azure-token"
-            ),
-        ),
-        "account_name": env("AZURE_STORAGE_ACCOUNT_NAME", default="nilakandi"),
-        "azure_container": env("AZURE_RESULT_CONTAINER", default="nilakandi"),
-    },
-}
+EARLIEST_DATA: str = env("EARLIEST_DATA", default="20200101") if not DEBUG else "20250101"
 
 if DEBUG:
     # The order is important. The new middleware must come before CsrfViewMiddleware.
