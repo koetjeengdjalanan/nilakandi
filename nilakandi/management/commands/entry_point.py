@@ -54,7 +54,6 @@ class Command(BaseCommand):
         """
         parser.add_argument(
             "--nopopulate",
-            type=bool,
             action="store_true",
             default=False,
             help="Skip database population. Only do this if you don't want to pull from Azure!",
@@ -126,7 +125,7 @@ class Command(BaseCommand):
                 gunicorn_args = [
                     "gunicorn",
                     "--config",
-                    "/app/gunicorn.conf.py",  # Assumes gunicorn.conf.py is in the project root
+                    f"{settings.BASE_DIR}/gunicorn.conf.py",  # Assumes gunicorn.conf.py is in the project root
                     "config.asgi:application",  # ASGI target (was config.wsgi:application)
                 ]
                 os.execvp("gunicorn", gunicorn_args)
@@ -215,7 +214,6 @@ class Command(BaseCommand):
             logging.getLogger("django").info("📋 Checking if the application is already initialized...")
             check = [(m.app, m.name) for m in MigrationRecorder.Migration.objects.all()]
             if not check:
-
                 raise UndefinedTable("No migrations recorded, assuming fresh database.")
             logging.getLogger("django").info("🥳 Application is already initialized.")
             finishing()

@@ -556,6 +556,18 @@ def summary(source: pd.DataFrame) -> pd.DataFrame:
         margins=True,
         margins_name="Grand Total",
     )
+
+    sub_totals = []
+    months = [col for col in pivot.columns.get_level_values(0).unique() if col != "Grand Total"]
+    for month in months:
+        month_col = [col for col in pivot.columns if col[0] == month]
+        if month_col:
+            month_total = pivot[month_col].sum(axis=1)
+            sub_totals.append((month, "Sub Total", month_total))
+
+    for month, sub_total_name, sub_total in sub_totals:
+        pivot[(month, sub_total_name)] = sub_total
+
     if "Grand Total" in pivot.columns.get_level_values(0):
         grand_total_cols = pivot.xs("Grand Total", axis=1, level=0, drop_level=False)
         month_cols = pivot.drop("Grand Total", axis=1, level=0)
